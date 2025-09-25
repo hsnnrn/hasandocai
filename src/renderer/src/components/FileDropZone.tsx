@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, FileText, File } from 'lucide-react'
+import { Upload, FileText, File, FolderOpen } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { useAppStore } from '@/store/appStore'
 import { cn } from '@/utils/cn'
@@ -10,6 +10,11 @@ const ACCEPTED_FORMATS = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
   'text/csv': ['.csv'],
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+  'image/bmp': ['.bmp'],
+  'image/gif': ['.gif'],
+  'image/tiff': ['.tiff', '.tif'],
 }
 
 export function FileDropZone() {
@@ -48,6 +53,7 @@ export function FileDropZone() {
     if (type.includes('word')) return <FileText className="h-5 w-5 text-blue-500" />
     if (type.includes('sheet')) return <FileText className="h-5 w-5 text-green-500" />
     if (type.includes('csv')) return <FileText className="h-5 w-5 text-orange-500" />
+    if (type.includes('image')) return <FileText className="h-5 w-5 text-purple-500" />
     return <File className="h-5 w-5 text-gray-500" />
   }
 
@@ -69,11 +75,12 @@ export function FileDropZone() {
               {isDragActive ? 'Drop files here' : 'Drag & drop files here'}
             </p>
             <p className="text-sm text-muted-foreground">
-              or click to browse • PDF, DOCX, XLSX, CSV supported
+              or click to browse • PDF, DOCX, CSV, Images supported
             </p>
           </div>
         </div>
       </Card>
+
 
       {/* File List */}
       {files.length > 0 && (

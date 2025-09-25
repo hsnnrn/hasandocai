@@ -14,11 +14,9 @@ export interface FileItem {
 }
 
 export interface ConversionSettings {
-  outputFormat: 'pdf' | 'docx' | 'xlsx' | 'csv'
-  quality: 'low' | 'medium' | 'high'
-  preserveFormatting: boolean
-  ocrEnabled: boolean
-  mergeFiles: boolean
+  iLovePDFTool?: string
+  outputFormat?: string
+  outputDirectory?: string
 }
 
 interface AppState {
@@ -71,13 +69,7 @@ export const useAppStore = create<AppState>()(
       clearFiles: () => set({ files: [] }),
 
       // Conversion settings
-      conversionSettings: {
-        outputFormat: 'pdf',
-        quality: 'high',
-        preserveFormatting: true,
-        ocrEnabled: false,
-        mergeFiles: false,
-      },
+      conversionSettings: {},
       setConversionSettings: (settings) => set((state) => ({
         conversionSettings: { ...state.conversionSettings, ...settings }
       })),

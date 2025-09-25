@@ -21,6 +21,8 @@
     "dist": "electron-builder",
     "test": "jest",
     "test:coverage": "jest --coverage",
+    "test:conversion": "npm run generate:samples && npm run test",
+    "generate:samples": "node scripts/generate-test-pdfs.js",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix"
   },
@@ -36,8 +38,12 @@
   "author": "Document Converter Team",
   "license": "MIT",
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/html-to-docx": "^1.8.0",
     "@types/jest": "^29.5.5",
     "@types/node": "^20.6.3",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^18.2.22",
     "@types/react-dom": "^18.2.7",
     "@typescript-eslint/eslint-plugin": "^6.7.2",
@@ -64,23 +70,32 @@
     "@radix-ui/react-select": "^1.2.2",
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-toast": "^1.1.5",
+    "axios": "^1.12.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
+    "convertapi": "^1.15.0",
+    "cors": "^2.8.5",
     "docx": "^8.5.0",
     "electron-store": "^8.1.0",
     "electron-updater": "^6.1.4",
     "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "form-data": "^4.0.4",
+    "html-to-docx": "^1.8.0",
     "lucide-react": "^0.279.0",
     "mammoth": "^1.6.0",
     "pdf-lib": "^1.17.1",
-    "pdf2pic": "^3.1.1",
+    "pdf-parse": "^1.1.1",
+    "pdf2html": "^4.4.0",
+    "pdfjs-dist": "^3.11.174",
+    "python-shell": "^5.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.2.3",
     "react-query": "^3.39.3",
     "react-router-dom": "^6.16.0",
     "tailwind-merge": "^1.14.0",
-    "tesseract.js": "^5.0.2",
+    "tesseract.js": "^6.0.1",
     "xlsx": "^0.18.5",
     "zustand": "^4.4.1"
   },
@@ -99,7 +114,9 @@
       {
         "from": "assets/",
         "to": "assets/",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
@@ -108,11 +125,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "darkModeSupport": true
@@ -122,11 +145,16 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "ia32"]
+          "arch": [
+            "x64",
+            "ia32"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -136,11 +164,15 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },

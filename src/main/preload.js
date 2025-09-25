@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openFiles: () => ipcRenderer.invoke('file:open'),
   processFile: (filePath, options) => ipcRenderer.invoke('file:process', filePath, options),
   saveFile: (data, defaultName) => ipcRenderer.invoke('file:save', data, defaultName),
+  saveFileFromPath: (tempPath, defaultName) => ipcRenderer.invoke('file:saveFromPath', tempPath, defaultName),
 
   // Data operations
   getConversionHistory: (filter) => ipcRenderer.invoke('data:getHistory', filter),

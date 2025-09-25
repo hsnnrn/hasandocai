@@ -7,6 +7,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openFiles: () => ipcRenderer.invoke('file:open'),
   processFile: (filePath: string, options: any) => ipcRenderer.invoke('file:process', filePath, options),
   saveFile: (data: Buffer, defaultName: string) => ipcRenderer.invoke('file:save', data, defaultName),
+  saveFileFromPath: (tempPath: string, defaultName: string) => ipcRenderer.invoke('file:saveFromPath', tempPath, defaultName),
+  selectDirectory: () => ipcRenderer.invoke('selectDirectory'),
+  getDefaultDirectory: () => ipcRenderer.invoke('getDefaultDirectory'),
+  
+  // Advanced PDF processing
+  convertPDFToDOCX: (filePath: string, options: any) => ipcRenderer.invoke('pdf:convertToDOCX', filePath, options),
+  convertPDFToDOCXEnhanced: (filePath: string, options: any) => ipcRenderer.invoke('pdf:convertToDOCXEnhanced', filePath, options),
 
   // Data operations
   getConversionHistory: (filter?: any) => ipcRenderer.invoke('data:getHistory', filter),
@@ -44,9 +51,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 declare global {
   interface Window {
     electronAPI: {
-      openFiles: () => Promise<string[]>;
+      openFiles: () => Promise<Array<{ path: string; name: string; size: number; type: string }>>;
       processFile: (filePath: string, options: any) => Promise<any>;
       saveFile: (data: Buffer, defaultName: string) => Promise<string | null>;
+      saveFileFromPath: (tempPath: string, defaultName: string) => Promise<string | null>;
+      convertPDFToDOCX: (filePath: string, options: any) => Promise<any>;
+      convertPDFToDOCXEnhanced: (filePath: string, options: any) => Promise<any>;
       getConversionHistory: (filter?: any) => Promise<any[]>;
       saveConversion: (record: any) => Promise<void>;
       getTemplates: () => Promise<any[]>;
