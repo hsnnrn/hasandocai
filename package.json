@@ -2,12 +2,12 @@
   "name": "document-converter",
   "version": "1.0.0",
   "description": "AI-powered local document conversion tool for PDF, Word, and Excel files",
-  "main": "dist/main/main.js",
+  "main": "dist/main/main/main.js",
   "homepage": "./",
   "scripts": {
     "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\"",
     "dev:renderer": "vite",
-    "dev:main": "tsc -p tsconfig.main.json && electron dist/main/main.js --inspect=5858",
+    "dev:main": "tsc -p tsconfig.main.json && copy .env dist\\.env && electron dist/main/main/main.js --inspect=5858 --enable-logging --v=1",
     "build": "npm run build:renderer && npm run build:main",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
@@ -24,7 +24,13 @@
     "test:conversion": "npm run generate:samples && npm run test",
     "generate:samples": "node scripts/generate-test-pdfs.js",
     "lint": "eslint src --ext .ts,.tsx",
-    "lint:fix": "eslint src --ext .ts,.tsx --fix"
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "electron-rebuild": "electron-rebuild",
+    "electron-rebuild:keytar": "electron-rebuild -f -w keytar",
+    "postinstall": "electron-builder install-app-deps",
+    "start": "npm run dev",
+    "clean": "rm -rf dist release",
+    "clean:all": "npm run clean && rm -rf node_modules package-lock.json"
   },
   "keywords": [
     "electron",
@@ -39,7 +45,9 @@
   "license": "MIT",
   "devDependencies": {
     "@types/cors": "^2.8.19",
+    "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.3",
+    "@types/keytar": "^4.13.1",
     "@types/html-to-docx": "^1.8.0",
     "@types/jest": "^29.5.5",
     "@types/node": "^20.6.3",
@@ -60,7 +68,7 @@
     "postcss": "^8.4.29",
     "tailwindcss": "^3.3.3",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.2.2",
+    "typescript": "^5.9.2",
     "vite": "^4.4.9"
   },
   "dependencies": {
@@ -70,13 +78,16 @@
     "@radix-ui/react-select": "^1.2.2",
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-toast": "^1.1.5",
+    "@supabase/supabase-js": "^2.57.4",
     "axios": "^1.12.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "convertapi": "^1.15.0",
     "cors": "^2.8.5",
     "docx": "^8.5.0",
+    "dotenv": "^17.2.2",
     "electron-store": "^8.1.0",
+    "keytar": "^7.9.0",
     "electron-updater": "^6.1.4",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
@@ -119,6 +130,7 @@
         ]
       }
     ],
+    "buildDependenciesFromSource": true,
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",

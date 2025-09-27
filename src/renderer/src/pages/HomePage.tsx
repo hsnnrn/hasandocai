@@ -1,11 +1,80 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { FileDropZone } from '@/components/FileDropZone'
 import { ConversionSettings } from '@/components/ConversionSettings'
 import { ProcessingProgress } from '@/components/ProcessingProgress'
+import { SupabaseProjectSelector } from '@/components/SupabaseProjectSelector'
 import { useAppStore } from '@/store/appStore'
 
 export function HomePage() {
   const { files, isProcessing } = useAppStore()
+  const [userInfo, setUserInfo] = useState<any>(null)
+  const [selectedProject, setSelectedProject] = useState<any>(null)
+
+  useEffect(() => {
+    // Check for existing Supabase login
+    const checkLoginStatus = () => {
+      const storedLogin = localStorage.getItem('supabase-login')
+      if (storedLogin) {
+        try {
+          const loginData = JSON.parse(storedLogin)
+          setUserInfo(loginData)
+          setSelectedProject(loginData.selectedProject || null)
+        } catch (error) {
+          console.error('Error parsing stored login data:', error)
+        }
+      }
+    }
+
+    checkLoginStatus()
+
+    // Listen for login changes
+    const handleLoginChange = (event: any) => {
+      const { isLoggedIn, userInfo: newUserInfo } = event.detail
+      if (isLoggedIn && newUserInfo) {
+        setUserInfo(newUserInfo)
+        setSelectedProject(newUserInfo.selectedProject || null)
+      } else {
+        setUserInfo(null)
+        setSelectedProject(null)
+      }
+    }
+
+    window.addEventListener('supabase-login-changed', handleLoginChange)
+    
+    return () => {
+      window.removeEventListener('supabase-login-changed', handleLoginChange)
+    }
+  }, [])
+
+  const handleProjectSelect = (project: any) => {
+    try {
+      console.log('Project selected:', project)
+      setSelectedProject(project)
+      
+      // Update user info with selected project
+      if (userInfo) {
+        const updatedUserInfo = {
+          ...userInfo,
+          selectedProject: project,
+          // Preserve projects array if it exists
+          projects: userInfo.projects || []
+        }
+        console.log('Updated user info:', updatedUserInfo)
+        setUserInfo(updatedUserInfo)
+        localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
+        
+        // Dispatch event
+        window.dispatchEvent(new CustomEvent('supabase-login-changed', {
+          detail: { isLoggedIn: true, userInfo: updatedUserInfo }
+        }))
+        console.log('Project selection completed successfully')
+      } else {
+        console.warn('No userInfo available when selecting project')
+      }
+    } catch (error) {
+      console.error('Error in handleProjectSelect:', error)
+    }
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -22,7 +91,14 @@ export function HomePage() {
           {isProcessing && <ProcessingProgress />}
         </div>
         
-        <div>
+        <div className="space-y-6">
+          {userInfo && (
+            <SupabaseProjectSelector
+              userInfo={userInfo}
+              selectedProject={selectedProject}
+              onProjectSelect={handleProjectSelect}
+            />
+          )}
           <ConversionSettings />
         </div>
       </div>

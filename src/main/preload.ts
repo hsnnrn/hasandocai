@@ -2,6 +2,17 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
+contextBridge.exposeInMainWorld('supabaseAPI', {
+  // Supabase OAuth Methods
+  startSupabaseAuth: (options: { method?: 'local' | 'custom'; preferExternal?: boolean }) => 
+    ipcRenderer.invoke('supabase:startAuth', options),
+  getAuthStatus: () => ipcRenderer.invoke('supabase:getAuthStatus'),
+  logoutSupabase: () => ipcRenderer.invoke('supabase:logout'),
+  // Supabase Management API Methods
+  fetchProjects: () => ipcRenderer.invoke('supabase:fetchProjects'),
+  fetchUserInfo: () => ipcRenderer.invoke('supabase:fetchUserInfo'),
+});
+
 contextBridge.exposeInMainWorld('electronAPI', {
   // File operations
   openFiles: () => ipcRenderer.invoke('file:open'),
@@ -50,6 +61,60 @@ contextBridge.exposeInMainWorld('electronAPI', {
 // Types for TypeScript
 declare global {
   interface Window {
+    supabaseAPI: {
+      startSupabaseAuth: (options: { method?: 'local' | 'custom'; preferExternal?: boolean }) => Promise<{
+        ok: boolean;
+        orgs?: any[];
+        projects?: any[];
+        selectedOrg?: any;
+        selectedProject?: any;
+        error?: string;
+        reason?: string;
+      }>;
+      getAuthStatus: () => Promise<{
+        ok: boolean;
+        tokens?: any;
+        authInfo?: any;
+        hasTokens?: boolean;
+        isTokenValid?: boolean;
+        error?: string;
+      }>;
+      logoutSupabase: () => Promise<{
+        ok: boolean;
+        message?: string;
+        error?: string;
+      }>;
+      fetchProjects: () => Promise<{
+        ok: boolean;
+        projects?: Array<{
+          id: string;
+          name: string;
+          ref: string;
+          project_api_url: string;
+          status: string;
+          organization_id?: string;
+          organization_name?: string;
+          organization_slug?: string;
+          region?: string;
+        }>;
+        organizations?: any[];
+        message?: string;
+        error?: string;
+      }>;
+      fetchUserInfo: () => Promise<{
+        ok: boolean;
+        user?: {
+          id: string;
+          email: string;
+          user_metadata: {
+            full_name: string;
+          };
+          app_metadata: any;
+        };
+        message?: string;
+        error?: string;
+      }>;
+    };
     electronAPI: {
       openFiles: () => Promise<Array<{ path: string; name: string; size: number; type: string }>>;
       processFile: (filePath: string, options: any) => Promise<any>;

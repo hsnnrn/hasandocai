@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/appStore'
-import { Settings2, Download, CheckCircle, FileText, Image, Shrink, Merge, Split, Droplets, FolderOpen } from 'lucide-react'
+import { Settings2, Download, CheckCircle, FileText, Image, Shrink, Merge, Split, Droplets, FolderOpen, Database } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
 const convertAPITools = [
@@ -197,6 +197,38 @@ export function ConversionSettings() {
   
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [selectedProject, setSelectedProject] = useState<any>(null)
+
+  useEffect(() => {
+    // Listen for project selection changes
+    const handleLoginChange = (event: any) => {
+      const { isLoggedIn, userInfo } = event.detail
+      if (isLoggedIn && userInfo?.selectedProject) {
+        setSelectedProject(userInfo.selectedProject)
+      } else {
+        setSelectedProject(null)
+      }
+    }
+
+    window.addEventListener('supabase-login-changed', handleLoginChange)
+    
+    // Check for existing project selection
+    const storedLogin = localStorage.getItem('supabase-login')
+    if (storedLogin) {
+      try {
+        const loginData = JSON.parse(storedLogin)
+        if (loginData.selectedProject) {
+          setSelectedProject(loginData.selectedProject)
+        }
+      } catch (error) {
+        console.error('Error parsing stored login data:', error)
+      }
+    }
+    
+    return () => {
+      window.removeEventListener('supabase-login-changed', handleLoginChange)
+    }
+  }, [])
 
   // Set default output directory
   useEffect(() => {
@@ -295,6 +327,28 @@ export function ConversionSettings() {
 
   return (
     <div className="space-y-6">
+      {/* Supabase Project Info */}
+      {selectedProject && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center space-x-3">
+              <Database className="h-5 w-5 text-green-600" />
+              <div>
+                <div className="font-medium text-green-800">
+                  Using Supabase Project: {selectedProject.name}
+                </div>
+                <div className="text-sm text-green-600">
+                  {selectedProject.ref} • {selectedProject.status}
+                  {selectedProject.organization_name && (
+                    <span> • {selectedProject.organization_name}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
