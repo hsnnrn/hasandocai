@@ -424,6 +424,10 @@ app.whenReady().then(async () => {
     registerCustomProtocol();
     console.log('Custom protocol registered');
     
+    // Import and register IPC handlers
+    await import('./ipc-handlers');
+    console.log('IPC handlers registered');
+    
     console.log('OAuth services initialized successfully');
   } catch (error) {
     console.error('❌ Failed to initialize OAuth services:', error);

@@ -5,6 +5,7 @@ import { HomePage } from './pages/HomePage'
 import { HistoryPage } from './pages/HistoryPage'
 import { TemplatesPage } from './pages/TemplatesPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { AnalysisResultsPage } from './pages/AnalysisResultsPage'
 import { Toaster } from './components/ui/toaster'
 import { useAppStore } from './store/appStore'
 import { Loader2 } from 'lucide-react'
@@ -45,6 +46,7 @@ function App() {
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/templates" element={<TemplatesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/results" element={<AnalysisResultsPage />} />
           </Routes>
         </Layout>
       </Router>

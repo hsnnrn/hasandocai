@@ -11,9 +11,6 @@ contextBridge.exposeInMainWorld('supabaseAPI', {
   // Supabase Management API Methods
   fetchProjects: () => ipcRenderer.invoke('supabase:fetchProjects'),
   fetchUserInfo: () => ipcRenderer.invoke('supabase:fetchUserInfo'),
-  fetchProjectApiKeys: (projectId: string) => ipcRenderer.invoke('supabase:fetchProjectApiKeys', projectId),
-  // Supabase Configuration
-  getSupabaseConfig: () => ipcRenderer.invoke('supabase:getConfig'),
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -70,32 +67,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
   searchSimilar: (queryText: string, projectRef?: string, options?: any) => ipcRenderer.invoke('embedding:searchSimilar', queryText, projectRef, options),
   getEmbeddingConfig: () => ipcRenderer.invoke('embedding:getConfig'),
 
-  // PDF Analysis Methods
-  initializePDFService: () => ipcRenderer.invoke('pdf:initializeService'),
-  analyzePDF: (filePath: string, options?: any) => ipcRenderer.invoke('pdf:analyzePDF', filePath, options),
-  analyzePDFBuffer: (buffer: Uint8Array, filename: string, options?: any) => ipcRenderer.invoke('pdf:analyzePDFBuffer', buffer, filename, options),
-  getDocumentAnalysis: (documentId: string) => ipcRenderer.invoke('pdf:getDocumentAnalysis', documentId),
-  searchDocuments: (query: string, options?: any) => ipcRenderer.invoke('pdf:searchDocuments', query, options),
-  getDocuments: (options?: any) => ipcRenderer.invoke('pdf:getDocuments', options),
-  deleteDocument: (documentId: string) => ipcRenderer.invoke('pdf:deleteDocument', documentId),
+        // PDF Analysis Methods
+        initializePDFService: () => ipcRenderer.invoke('pdf:initializeService'),
+        analyzePDF: (filePath: string, options?: any) => ipcRenderer.invoke('pdf:analyzePDF', filePath, options),
+        analyzePDFBuffer: (buffer: Uint8Array, filename: string, options?: any) => ipcRenderer.invoke('pdf:analyzePDFBuffer', buffer, filename, options),
+        getDocumentAnalysis: (documentId: string) => ipcRenderer.invoke('pdf:getDocumentAnalysis', documentId),
+        searchDocuments: (query: string, options?: any) => ipcRenderer.invoke('pdf:searchDocuments', query, options),
+        getDocuments: (options?: any) => ipcRenderer.invoke('pdf:getDocuments', options),
+        deleteDocument: (documentId: string) => ipcRenderer.invoke('pdf:deleteDocument', documentId),
 
-  // DOCX Analysis Methods
-  initializeDOCXService: () => ipcRenderer.invoke('docx:initializeService'),
-  analyzeDOCXBuffer: (buffer: Uint8Array, filename: string, options?: any) => ipcRenderer.invoke('docx:analyzeDOCXBuffer', buffer, filename, options),
+        // DOCX Analysis Methods
+        initializeDOCXService: () => ipcRenderer.invoke('docx:initializeService'),
+        analyzeDOCXBuffer: (buffer: Uint8Array, filename: string, options?: any) => ipcRenderer.invoke('docx:analyzeDOCXBuffer', buffer, filename, options),
 
-  // Excel Analysis Methods
-  initializeExcelService: () => ipcRenderer.invoke('excel:initializeService'),
-  analyzeExcelBuffer: (buffer: Uint8Array, filename: string, options?: any) => ipcRenderer.invoke('excel:analyzeExcelBuffer', buffer, filename, options),
+        // Excel Analysis Methods
+        initializeExcelService: () => ipcRenderer.invoke('excel:initializeService'),
+        analyzeExcelBuffer: (buffer: Uint8Array, filename: string, options?: any) => ipcRenderer.invoke('excel:analyzeExcelBuffer', buffer, filename, options),
 
-  // PowerPoint Analysis Methods
-  initializePowerPointService: () => ipcRenderer.invoke('powerpoint:initializeService'),
-  analyzePowerPointBuffer: (buffer: Uint8Array, filename: string, options?: any) => ipcRenderer.invoke('powerpoint:analyzePowerPointBuffer', buffer, filename, options),
+        // PowerPoint Analysis Methods
+        initializePowerPointService: () => ipcRenderer.invoke('powerpoint:initializeService'),
+        analyzePowerPointBuffer: (buffer: Uint8Array, filename: string, options?: any) => ipcRenderer.invoke('powerpoint:analyzePowerPointBuffer', buffer, filename, options),
 
-  // Supabase Upload Methods
-  uploadAnalysisToSupabase: (analysisResult: any) => ipcRenderer.invoke('supabase:uploadAnalysis', analysisResult),
-  
-  // Auth Methods
-  saveAuthInfo: (authInfo: any) => ipcRenderer.invoke('auth:saveAuthInfo', authInfo),
+        // Supabase Upload Methods
+        uploadAnalysisToSupabase: (analysisResult: any) => ipcRenderer.invoke('supabase:uploadAnalysis', analysisResult),
 });
 
 // Types for TypeScript
@@ -154,16 +148,6 @@ declare global {
         message?: string;
         error?: string;
       }>;
-      getSupabaseConfig: () => Promise<{
-        success: boolean;
-        config?: {
-          url: string;
-          anonKey: string;
-          oauthClientId?: string;
-          oauthClientSecret?: string;
-        };
-        error?: string;
-      }>;
     };
     electronAPI: {
       openFiles: () => Promise<Array<{ path: string; name: string; size: number; type: string }>>;
@@ -195,91 +179,87 @@ declare global {
       searchSimilar: (queryText: string, projectRef?: string, options?: any) => Promise<{ success: boolean; results?: any[]; error?: string }>;
       getEmbeddingConfig: () => Promise<{ success: boolean; config?: any; error?: string }>;
 
-      // PDF Analysis Methods
-      initializePDFService: () => Promise<{ success: boolean; message?: string; error?: string }>;
-      analyzePDF: (filePath: string, options?: any) => Promise<{
-        success: boolean;
-        documentId?: string;
-        title?: string;
-        filename?: string;
-        pageCount?: number;
-        textSections?: any[];
-        aiCommentary?: any[];
-        processingTime?: number;
-        error?: string;
-      }>;
-      analyzePDFBuffer: (buffer: Uint8Array, filename: string, options?: any) => Promise<{
-        success: boolean;
-        documentId?: string;
-        title?: string;
-        filename?: string;
-        pageCount?: number;
-        textSections?: any[];
-        aiCommentary?: any[];
-        processingTime?: number;
-        error?: string;
-      }>;
-      getDocumentAnalysis: (documentId: string) => Promise<{ success: boolean; analysis?: any; error?: string }>;
-      searchDocuments: (query: string, options?: any) => Promise<{ success: boolean; results?: any[]; error?: string }>;
-      getDocuments: (options?: any) => Promise<{ success: boolean; documents?: any[]; error?: string }>;
-      deleteDocument: (documentId: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+            // PDF Analysis Methods
+            initializePDFService: () => Promise<{ success: boolean; message?: string; error?: string }>;
+            analyzePDF: (filePath: string, options?: any) => Promise<{
+              success: boolean;
+              documentId?: string;
+              title?: string;
+              filename?: string;
+              pageCount?: number;
+              textSections?: any[];
+              aiCommentary?: any[];
+              processingTime?: number;
+              error?: string;
+            }>;
+            analyzePDFBuffer: (buffer: Uint8Array, filename: string, options?: any) => Promise<{
+              success: boolean;
+              documentId?: string;
+              title?: string;
+              filename?: string;
+              pageCount?: number;
+              textSections?: any[];
+              aiCommentary?: any[];
+              processingTime?: number;
+              error?: string;
+            }>;
+            getDocumentAnalysis: (documentId: string) => Promise<{ success: boolean; analysis?: any; error?: string }>;
+            searchDocuments: (query: string, options?: any) => Promise<{ success: boolean; results?: any[]; error?: string }>;
+            getDocuments: (options?: any) => Promise<{ success: boolean; documents?: any[]; error?: string }>;
+            deleteDocument: (documentId: string) => Promise<{ success: boolean; message?: string; error?: string }>;
 
-      // DOCX Analysis Methods
-      initializeDOCXService: () => Promise<{ success: boolean; message?: string; error?: string }>;
-      analyzeDOCXBuffer: (buffer: Uint8Array, filename: string, options?: any) => Promise<{
-        success: boolean;
-        documentId?: string;
-        title?: string;
-        filename?: string;
-        pageCount?: number;
-        textSections?: any[];
-        aiCommentary?: any[];
-        processingTime?: number;
-        error?: string;
-      }>;
+            // DOCX Analysis Methods
+            initializeDOCXService: () => Promise<{ success: boolean; message?: string; error?: string }>;
+            analyzeDOCXBuffer: (buffer: Uint8Array, filename: string, options?: any) => Promise<{
+              success: boolean;
+              documentId?: string;
+              title?: string;
+              filename?: string;
+              pageCount?: number;
+              textSections?: any[];
+              aiCommentary?: any[];
+              processingTime?: number;
+              error?: string;
+            }>;
 
-      // Excel Analysis Methods
-      initializeExcelService: () => Promise<{ success: boolean; message?: string; error?: string }>;
-      analyzeExcelBuffer: (buffer: Uint8Array, filename: string, options?: any) => Promise<{
-        success: boolean;
-        documentId?: string;
-        title?: string;
-        filename?: string;
-        sheetCount?: number;
-        textSections?: any[];
-        aiCommentary?: any[];
-        processingTime?: number;
-        error?: string;
-      }>;
+            // Excel Analysis Methods
+            initializeExcelService: () => Promise<{ success: boolean; message?: string; error?: string }>;
+            analyzeExcelBuffer: (buffer: Uint8Array, filename: string, options?: any) => Promise<{
+              success: boolean;
+              documentId?: string;
+              title?: string;
+              filename?: string;
+              sheetCount?: number;
+              textSections?: any[];
+              aiCommentary?: any[];
+              processingTime?: number;
+              error?: string;
+            }>;
 
-      // PowerPoint Analysis Methods
-      initializePowerPointService: () => Promise<{ success: boolean; message?: string; error?: string }>;
-      analyzePowerPointBuffer: (buffer: Uint8Array, filename: string, options?: any) => Promise<{
-        success: boolean;
-        documentId?: string;
-        title?: string;
-        filename?: string;
-        slideCount?: number;
-        textSections?: any[];
-        aiCommentary?: any[];
-        processingTime?: number;
-        error?: string;
-      }>;
+            // PowerPoint Analysis Methods
+            initializePowerPointService: () => Promise<{ success: boolean; message?: string; error?: string }>;
+            analyzePowerPointBuffer: (buffer: Uint8Array, filename: string, options?: any) => Promise<{
+              success: boolean;
+              documentId?: string;
+              title?: string;
+              filename?: string;
+              slideCount?: number;
+              textSections?: any[];
+              aiCommentary?: any[];
+              processingTime?: number;
+              error?: string;
+            }>;
 
-      // Supabase Upload Methods
-      uploadAnalysisToSupabase: (analysisResult: any) => Promise<{
-        success: boolean;
-        message?: string;
-        documentId?: string;
-        uploadedAt?: string;
-        error?: string;
-      }>;
-      
-      // Auth Methods
-      saveAuthInfo: (authInfo: any) => Promise<{
-        success: boolean;
-        error?: string;
-      }>;
-    };
+          // Supabase Upload Methods
+          uploadAnalysisToSupabase: (analysisResult: any) => Promise<{
+            success: boolean;
+            message?: string;
+            documentId?: string;
+            uploadedAt?: string;
+            error?: string;
+          }>;
+        }
+      }
+    }
   }
 }

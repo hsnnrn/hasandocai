@@ -3,6 +3,7 @@ import { FileDropZone } from '@/components/FileDropZone'
 import { ConversionSettings } from '@/components/ConversionSettings'
 import { ProcessingProgress } from '@/components/ProcessingProgress'
 import { SupabaseProjectSelector } from '@/components/SupabaseProjectSelector'
+import { ProcessAndIndexButton } from '@/components/ProcessAndIndexButton'
 import { useAppStore } from '@/store/appStore'
 
 export function HomePage() {
@@ -100,8 +101,23 @@ export function HomePage() {
             />
           )}
           <ConversionSettings />
+          
+          {/* BGE-M3 Embedding and Indexing */}
+          {selectedProject && files.length > 0 && (
+            <ProcessAndIndexButton
+              filePath={files[0]?.path}
+              projectRef={selectedProject.ref}
+              onSuccess={(result) => {
+                console.log('Document processed and indexed successfully:', result);
+              }}
+              onError={(error) => {
+                console.error('Document processing failed:', error);
+              }}
+            />
+          )}
         </div>
       </div>
+
 
       {files.length > 0 && (
         <div className="bg-muted/50 rounded-lg p-4">

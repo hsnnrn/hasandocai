@@ -1,9 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Supabase configuration
-// TODO: Replace with your actual Supabase project URL and anon key
-const supabaseUrl = 'https://your-project-ref.supabase.co'
-const supabaseAnonKey = 'your-anon-key'
+// Supabase configuration - will be loaded dynamically
+let supabaseUrl = 'https://your-project-ref.supabase.co'
+let supabaseAnonKey = 'your-anon-key'
+
+// Load configuration from main process
+const loadSupabaseConfig = async () => {
+  try {
+    if (window.supabaseAPI && window.supabaseAPI.getSupabaseConfig) {
+      const result = await window.supabaseAPI.getSupabaseConfig();
+      if (result.success && result.config) {
+        supabaseUrl = result.config.url;
+        supabaseAnonKey = result.config.anonKey;
+        console.log('✅ Supabase config loaded from main process');
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to load Supabase config from main process:', error);
+  }
+};
+
+// Initialize config on module load
+loadSupabaseConfig();
 
 // For development, you can use these demo credentials:
 // URL: https://demo.supabase.co

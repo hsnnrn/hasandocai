@@ -1,0 +1,54 @@
+# BGE-M3 Embedding Model Server Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core FastAPI and server dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# Machine Learning and Embedding
+# Note: Install appropriate torch version for your platform
+# For CUDA (Windows/Linux with NVIDIA GPU):
+# torch==2.1.0+cu118 --index-url https://download.pytorch.org/whl/cu118
+# For CPU only:
+# torch==2.1.0+cpu --index-url https://download.pytorch.org/whl/cpu
+# For macOS with Apple Silicon (M1/M2):
+# torch==2.1.0 --index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0
+
+# BGE-M3 Model (replace with actual package when available)
+# FlagEmbedding==1.2.5  # Uncomment when BGE-M3 is available
+# For now, we'll use sentence-transformers as fallback
+sentence-transformers>=2.2.2
+
+# Numerical computing
+numpy>=1.24.0
+scipy>=1.10.0
+
+# HTTP client for model downloads
+requests>=2.31.0
+httpx>=0.25.0
+
+# Async support
+asyncio-mqtt>=0.13.0
+
+# Logging and monitoring
+structlog>=23.1.0
+
+# Development and testing (optional)
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+flake8>=6.0.0
+
+# Platform-specific notes:
+# Windows: Make sure to install CUDA toolkit if using GPU
+# macOS: Use MPS backend for Apple Silicon
+# Linux: Install CUDA toolkit for NVIDIA GPU support
+
+# Installation commands by platform:
+# Windows (CUDA): pip install torch==2.1.0+cu118 --index-url https://download.pytorch.org/whl/cu118
+# Windows (CPU): pip install torch==2.1.0+cpu --index-url https://download.pytorch.org/whl/cpu
+# macOS: pip install torch==2.1.0 --index-url https://download.pytorch.org/whl/cpu
+# Linux (CUDA): pip install torch==2.1.0+cu118 --index-url https://download.pytorch.org/whl/cu118
+# Linux (CPU): pip install torch==2.1.0+cpu --index-url https://download.pytorch.org/whl/cpu

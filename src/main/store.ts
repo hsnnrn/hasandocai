@@ -1,4 +1,11 @@
-import * as keytar from 'keytar';
+// Optional keytar import with fallback
+let keytar: any = null;
+try {
+  keytar = require('keytar');
+} catch (error) {
+  console.warn('Keytar not available, using electron-store only:', error);
+}
+
 import Store from 'electron-store';
 
 /**
@@ -61,6 +68,11 @@ export class TokenStorage {
    * Test keytar availability
    */
   private async testKeytar(): Promise<boolean> {
+    if (!keytar) {
+      console.warn('Keytar module not loaded, using electron-store only');
+      return false;
+    }
+    
     try {
       await keytar.setPassword(this.serviceName, 'test', 'test');
       await keytar.deletePassword(this.serviceName, 'test');
@@ -295,4 +307,28 @@ export function getTokenStorage(): TokenStorage {
     tokenStorageInstance = createDefaultTokenStorage();
   }
   return tokenStorageInstance;
+}
+
+/**
+ * Get selected project from OAuth flow
+ */
+export async function getSelectedProject(): Promise<any> {
+  try {
+    const storage = getTokenStorage();
+    const authInfo = await storage.getAuthInfo();
+    
+    console.log('🔍 getSelectedProject - Auth info:', authInfo);
+    console.log('🔍 getSelectedProject - Selected project:', authInfo?.selectedProject);
+    
+    if (authInfo?.selectedProject) {
+      console.log('✅ Selected project from OAuth:', authInfo.selectedProject);
+      return authInfo.selectedProject;
+    }
+    
+    console.log('❌ No selected project found in OAuth flow');
+    return null;
+  } catch (error) {
+    console.error('❌ Failed to get selected project:', error);
+    return null;
+  }
 }

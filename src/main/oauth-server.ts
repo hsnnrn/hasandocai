@@ -199,7 +199,7 @@ export class OAuthServerImpl implements OAuthServer {
     });
 
     // Catch-all route for unknown endpoints
-    this.app.use('*', (req, res) => {
+    this.app.use((req, res) => {
       res.status(404).json({
         error: 'Not Found',
         message: 'The requested endpoint does not exist'

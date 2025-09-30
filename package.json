@@ -7,10 +7,10 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\"",
     "dev:renderer": "vite",
-    "dev:main": "tsc -p tsconfig.main.json && copy .env dist\\.env && electron dist/main/main/main.js --inspect=5858 --enable-logging --v=1",
+    "dev:main": "tsc -p tsconfig.main.json && node -e \"try { require('fs').copyFileSync('.env', 'dist/.env'); console.log('✅ .env copied to dist/'); } catch(e) { console.log('⚠️ No .env file found, continuing...'); }\" && electron dist/main/main/main.js --inspect=5858 --enable-logging --v=1",
     "build": "npm run build:renderer && npm run build:main",
     "build:renderer": "vite build",
-    "build:main": "tsc -p tsconfig.main.json",
+    "build:main": "tsc -p tsconfig.main.json && node -e \"try { require('fs').copyFileSync('.env', 'dist/.env'); console.log('✅ .env copied to dist/ for production'); } catch(e) { console.log('⚠️ No .env file found for production build'); }\"",
     "build:all": "npm run build && electron-builder --mac --win --linux",
     "build:windows": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
@@ -43,11 +43,15 @@
   ],
   "author": "Document Converter Team",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
+  },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.3",
-    "@types/keytar": "^4.13.1",
+    "@types/keytar": "^4.0.0",
     "@types/html-to-docx": "^1.8.0",
     "@types/jest": "^29.5.5",
     "@types/node": "^20.6.3",

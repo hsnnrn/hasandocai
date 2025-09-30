@@ -179,13 +179,27 @@ export function SupabaseLoginModal({ isOpen, onClose }: SupabaseLoginModalProps)
     }
   }
 
-  const handleProjectSelect = (project: any) => {
+  const handleProjectSelect = async (project: any) => {
     setSelectedProject(project)
     
     // Seçilen proje ile birlikte kullanıcı bilgilerini güncelle
     const updatedUserInfo = {
       ...userInfo,
       selectedProject: project
+    }
+    
+    // Main process'e seçili proje bilgisini kaydet
+    try {
+      const authInfo = {
+        selectedProject: project,
+        lastAuthTime: Date.now()
+      }
+      
+      console.log('🔐 Saving selected project to main process:', project);
+      await window.electronAPI.saveAuthInfo(authInfo);
+      console.log('✅ Selected project saved successfully');
+    } catch (error) {
+      console.error('❌ Failed to save selected project:', error);
     }
     
     setIsLoggedIn(true)

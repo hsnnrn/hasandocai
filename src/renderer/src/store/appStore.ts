@@ -11,6 +11,21 @@ export interface FileItem {
   progress: number
   result?: any
   error?: string
+  fileData?: File // Store the actual File object
+}
+
+export interface AnalysisResult {
+  documentId: string
+  title: string
+  filename: string
+  fileType: string
+  textSections: any[]
+  aiCommentary: any[]
+  processingTime?: number
+  pageCount?: number
+  sheetCount?: number
+  slideCount?: number
+  createdAt: string
 }
 
 export interface ConversionSettings {
@@ -30,6 +45,13 @@ interface AppState {
   removeFile: (id: string) => void
   updateFile: (id: string, updates: Partial<FileItem>) => void
   clearFiles: () => void
+
+  // Analysis results
+  analysisResults: AnalysisResult[]
+  addAnalysisResult: (result: AnalysisResult) => void
+  removeAnalysisResult: (documentId: string) => void
+  clearAnalysisResults: () => void
+  getAnalysisResult: (documentId: string) => AnalysisResult | undefined
 
   // Conversion settings
   conversionSettings: ConversionSettings
@@ -68,6 +90,20 @@ export const useAppStore = create<AppState>()(
       })),
       clearFiles: () => set({ files: [] }),
 
+      // Analysis results
+      analysisResults: [],
+      addAnalysisResult: (result) => set((state) => ({
+        analysisResults: [...state.analysisResults, result]
+      })),
+      removeAnalysisResult: (documentId) => set((state) => ({
+        analysisResults: state.analysisResults.filter(result => result.documentId !== documentId)
+      })),
+      clearAnalysisResults: () => set({ analysisResults: [] }),
+      getAnalysisResult: (documentId) => {
+        const state = get()
+        return state.analysisResults.find(result => result.documentId === documentId)
+      },
+
       // Conversion settings
       conversionSettings: {},
       setConversionSettings: (settings) => set((state) => ({
@@ -91,6 +127,7 @@ export const useAppStore = create<AppState>()(
         conversionSettings: state.conversionSettings,
         activeTab: state.activeTab,
         sidebarOpen: state.sidebarOpen,
+        analysisResults: state.analysisResults,
       }),
     }
   )
