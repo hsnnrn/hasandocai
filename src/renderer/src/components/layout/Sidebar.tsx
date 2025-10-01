@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   CheckCircle,
+  Building2,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { SupabaseLoginModal } from '@/components/SupabaseLoginModal'
@@ -29,6 +30,11 @@ const navItems = [
     name: 'Templates',
     href: '/templates',
     icon: Layers,
+  },
+  {
+    name: 'Tenant',
+    href: '/tenant',
+    icon: Building2,
   },
   {
     name: 'Settings',

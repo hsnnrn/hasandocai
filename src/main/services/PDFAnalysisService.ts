@@ -65,8 +65,8 @@ export class PDFAnalysisService {
 
   constructor() {
     // Initialize Supabase client with mock configuration for testing
-    const supabaseUrl = process.env.SUPABASE_URL || 'https://mock-project.supabase.co';
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || 'mock-anon-key';
+    const supabaseUrl = process.env.SUPABASE_URL || 'https://jgrpcefpovpqovavqyfp.supabase.co';
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpncnBjZWZwb3ZwcW92YXZxeWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg4MTQxMjMsImV4cCI6MjA3NDM5MDEyM30.wGIb2wtVL0ZaFOtqPy3n7WTYq4MxY3EgVwMEGdiCvQo';
     
     console.log('PDFAnalysisService: Initializing with Supabase URL:', supabaseUrl);
     console.log('PDFAnalysisService: Supabase Key present:', !!supabaseKey);
