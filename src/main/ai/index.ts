@@ -9,8 +9,11 @@
 import { app } from 'electron';
 import * as path from 'path';
 import { EmbeddingClient } from './embeddingClient';
+import { MockEmbeddingClient } from './mockEmbeddingClient';
 import { VectorClient } from './vectorClient';
+import { MockVectorClient } from './mockVectorClient';
 import { LLMRunner } from './llmRunner';
+import { MockLLMRunner } from './mockLLMRunner';
 
 export interface AIConfig {
   modelPath: string;
@@ -58,17 +61,38 @@ export interface IndexResponse {
 }
 
 class AIService {
-  private embeddingClient: EmbeddingClient;
-  private vectorClient: VectorClient;
-  private llmRunner: LLMRunner;
+  private embeddingClient: EmbeddingClient | MockEmbeddingClient;
+  private vectorClient: VectorClient | MockVectorClient;
+  private llmRunner: LLMRunner | MockLLMRunner;
   private config: AIConfig;
   private isInitialized: boolean = false;
 
   constructor() {
     this.config = this.getDefaultConfig();
-    this.embeddingClient = new EmbeddingClient();
-    this.vectorClient = new VectorClient(this.config.vectorDbUrl);
-    this.llmRunner = new LLMRunner(this.config.modelPath);
+    
+    // Use mock embedding client for development
+    try {
+      this.embeddingClient = new EmbeddingClient();
+    } catch (error) {
+      console.log('🔧 BGE-M3 not available, using Mock Embedding Client');
+      this.embeddingClient = new MockEmbeddingClient();
+    }
+    
+    // Use mock client for development if Qdrant is not available
+    try {
+      this.vectorClient = new VectorClient(this.config.vectorDbUrl);
+    } catch (error) {
+      console.log('🔧 Qdrant not available, using Mock Vector Client');
+      this.vectorClient = new MockVectorClient(this.config.vectorDbUrl);
+    }
+    
+    // Use mock LLM runner for development
+    try {
+      this.llmRunner = new LLMRunner(this.config.modelPath);
+    } catch (error) {
+      console.log('🔧 Llama.cpp not available, using Mock LLM Runner');
+      this.llmRunner = new MockLLMRunner(this.config.modelPath);
+    }
   }
 
   private getDefaultConfig(): AIConfig {
