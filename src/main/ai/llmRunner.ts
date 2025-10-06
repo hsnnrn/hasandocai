@@ -205,12 +205,12 @@ export class LLMRunner {
   private cleanOutput(output: string): string {
     // Remove common llama.cpp artifacts
     let cleaned = output
-      .replace(/^.*?\[INST\].*?\[/INST\]/s, '') // Remove [INST] tags
-      .replace(/^.*?<s>.*?<\/s>/s, '') // Remove <s> tags
-      .replace(/^.*?### Human:.*?### Assistant:/s, '') // Remove conversation markers
-      .replace(/^.*?### Human:.*?### Assistant/s, '') // Remove incomplete conversation markers
-      .replace(/^.*?Human:.*?Assistant:/s, '') // Remove simple conversation markers
-      .replace(/^.*?Human:.*?Assistant/s, '') // Remove incomplete simple conversation markers
+      .replace(/^.*?\[INST\].*?\[\/INST\]/g, '') // Remove [INST] tags
+      .replace(/^.*?<s>.*?<\/s>/g, '') // Remove <s> tags
+      .replace(/^.*?### Human:.*?### Assistant:/g, '') // Remove conversation markers
+      .replace(/^.*?### Human:.*?### Assistant/g, '') // Remove incomplete conversation markers
+      .replace(/^.*?Human:.*?Assistant:/g, '') // Remove simple conversation markers
+      .replace(/^.*?Human:.*?Assistant/g, '') // Remove incomplete simple conversation markers
       .trim();
 
     // Remove any remaining prompt artifacts

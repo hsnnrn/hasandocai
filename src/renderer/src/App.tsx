@@ -9,6 +9,7 @@ import { TemplatesPage } from './pages/TemplatesPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { AnalysisResultsPage } from './pages/AnalysisResultsPage'
 import { LocalStorageViewPage } from './pages/LocalStorageViewPage'
+import { AIChatPage } from './pages/AIChatPage'
 import { Toaster } from './components/ui/toaster'
 import { useAppStore } from './store/appStore'
 import { Loader2 } from 'lucide-react'
@@ -54,6 +55,7 @@ function App() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/results" element={<AnalysisResultsPage />} />
             <Route path="/local-storage" element={<LocalStorageViewPage />} />
+            <Route path="/ai-chat" element={<AIChatPage />} />
           </Routes>
         </Layout>
       </Router>
