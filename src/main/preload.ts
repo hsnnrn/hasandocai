@@ -106,6 +106,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   initializeGroupAnalysisService: () => ipcRenderer.invoke('group:initializeGroupAnalysisService'),
   analyzeGroup: (groupData: any, analysisTypes?: string[]) => ipcRenderer.invoke('group:analyzeGroup', groupData, analysisTypes),
   getGroupAnalysisResults: (groupId: string) => ipcRenderer.invoke('group:getGroupAnalysisResults', groupId),
+
+  // AI RAG Chat Methods
+  initializeAI: () => ipcRenderer.invoke('ai:initialize'),
+  indexTextSections: (request: any) => ipcRenderer.invoke('ai:indexTextSections', request),
+  queryAI: (request: any) => ipcRenderer.invoke('ai:query', request),
+  getAIStatus: () => ipcRenderer.invoke('ai:getStatus'),
+  cleanupAI: () => ipcRenderer.invoke('ai:cleanup'),
 });
 
 // Types for TypeScript
@@ -353,6 +360,57 @@ declare global {
       getGroupAnalysisResults: (groupId: string) => Promise<{
         success: boolean;
         results?: any[];
+        message?: string;
+        error?: string;
+      }>;
+
+      // AI RAG Chat Methods
+      initializeAI: () => Promise<{
+        success: boolean;
+        error?: string;
+      }>;
+      indexTextSections: (request: {
+        textSections: Array<{
+          id: string;
+          content: string;
+          metadata?: any;
+        }>;
+        documentId?: string;
+        overwrite?: boolean;
+      }) => Promise<{
+        success: boolean;
+        indexedCount?: number;
+        error?: string;
+      }>;
+      queryAI: (request: {
+        question: string;
+        conversationId?: string;
+        maxTokens?: number;
+        temperature?: number;
+        topK?: number;
+      }) => Promise<{
+        success: boolean;
+        answer?: string;
+        sources?: Array<{
+          content: string;
+          score: number;
+          metadata: any;
+        }>;
+        error?: string;
+        processingTime?: number;
+      }>;
+      getAIStatus: () => Promise<{
+        success: boolean;
+        status?: {
+          initialized: boolean;
+          modelPath: string;
+          vectorDbUrl: string;
+          embeddingDimension: number;
+        };
+        error?: string;
+      }>;
+      cleanupAI: () => Promise<{
+        success: boolean;
         message?: string;
         error?: string;
       }>;

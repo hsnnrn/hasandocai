@@ -1738,3 +1738,146 @@ console.log('- auth:saveAuthInfo');
 console.log('🔍 Verifying group:initializeGroupAnalysisService handler registration...');
 const handlers = ipcMain.listenerCount('group:initializeGroupAnalysisService');
 console.log(`📊 Handler count for group:initializeGroupAnalysisService: ${handlers}`);
+
+/**
+ * AI RAG Chat IPC Handlers
+ */
+
+// Import AI service
+let aiService: any = null;
+
+// Initialize AI service
+ipcMain.handle('ai:initialize', async () => {
+  try {
+    console.log('🤖 Initializing AI service...');
+    
+    if (!aiService) {
+      const { getAIService } = await import('./ai');
+      aiService = getAIService();
+    }
+    
+    const result = await aiService.initialize();
+    
+    if (result.success) {
+      console.log('✅ AI service initialized successfully');
+    } else {
+      console.error('❌ AI service initialization failed:', result.error);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('❌ Failed to initialize AI service:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+// Index text sections
+ipcMain.handle('ai:indexTextSections', async (event, request) => {
+  try {
+    if (!aiService) {
+      const { getAIService } = await import('./ai');
+      aiService = getAIService();
+    }
+    
+    console.log('📚 Indexing text sections:', request.textSections?.length || 0);
+    
+    const result = await aiService.indexTextSections(request);
+    
+    if (result.success) {
+      console.log(`✅ Indexed ${result.indexedCount} text sections`);
+    } else {
+      console.error('❌ Failed to index text sections:', result.error);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('❌ Failed to index text sections:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+// Handle AI query
+ipcMain.handle('ai:query', async (event, request) => {
+  try {
+    if (!aiService) {
+      const { getAIService } = await import('./ai');
+      aiService = getAIService();
+    }
+    
+    console.log('🤔 Processing AI query:', request.question);
+    
+    const result = await aiService.handleQuery(request);
+    
+    if (result.success) {
+      console.log('✅ AI query processed successfully');
+      console.log('📝 Answer length:', result.answer?.length || 0);
+      console.log('🔍 Sources found:', result.sources?.length || 0);
+    } else {
+      console.error('❌ Failed to process AI query:', result.error);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('❌ Failed to process AI query:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+// Get AI service status
+ipcMain.handle('ai:getStatus', async () => {
+  try {
+    if (!aiService) {
+      const { getAIService } = await import('./ai');
+      aiService = getAIService();
+    }
+    
+    const status = await aiService.getStatus();
+    return {
+      success: true,
+      status
+    };
+  } catch (error) {
+    console.error('❌ Failed to get AI service status:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+// Cleanup AI service
+ipcMain.handle('ai:cleanup', async () => {
+  try {
+    if (aiService) {
+      await aiService.cleanup();
+      aiService = null;
+    }
+    
+    return {
+      success: true,
+      message: 'AI service cleaned up'
+    };
+  } catch (error) {
+    console.error('❌ Failed to cleanup AI service:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+console.log('AI RAG Chat IPC handlers registered:');
+console.log('- ai:initialize');
+console.log('- ai:indexTextSections');
+console.log('- ai:query');
+console.log('- ai:getStatus');
+console.log('- ai:cleanup');

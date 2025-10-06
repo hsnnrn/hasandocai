@@ -27,6 +27,7 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:conversion": "npm run generate:samples && npm run test",
+    "test:rag": "node scripts/test-rag-integration.js",
     "generate:samples": "node scripts/generate-test-pdfs.js",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
