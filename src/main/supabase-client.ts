@@ -5,7 +5,17 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
  * This provides proper authentication for database operations
  */
 export const getSupabaseClient = (accessToken: string, projectUrl: string): SupabaseClient => {
-  return createClient(projectUrl, accessToken, {
+  // Use a placeholder anon key - you need to replace this with the real anon key from Supabase Dashboard
+  // Go to Supabase Dashboard > Settings > API > Project API keys > anon public
+  const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3ZXpneXFva255Z3BiY2ZwbmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU5MDAwMDAsImV4cCI6MjA1MTQ3NjAwMH0.REPLACE_WITH_REAL_ANON_KEY';
+  
+  console.log('🔑 Creating Supabase client with:', {
+    projectUrl,
+    accessTokenPreview: accessToken ? accessToken.substring(0, 20) + '...' : 'null',
+    usingAnonKey: anonKey.includes('REPLACE_WITH_REAL_ANON_KEY') ? 'PLACEHOLDER' : 'REAL'
+  });
+  
+  return createClient(projectUrl, anonKey, {
     global: { 
       headers: { 
         Authorization: `Bearer ${accessToken}` 
@@ -34,8 +44,28 @@ export const createAuthenticatedSupabaseClient = async (projectId: string, proje
       return null;
     }
     
-    console.log('✅ Using access token for Supabase authentication');
-    return getSupabaseClient(tokens.accessToken, projectUrl);
+    // Try to get anon key from token storage first
+    const authInfo = await tokenStorage.getAuthInfo();
+    const anonKey = authInfo?.anonKey;
+    
+    if (anonKey) {
+      console.log('✅ Using stored anon key for Supabase authentication');
+      return createClient(projectUrl, anonKey, {
+        global: { 
+          headers: { 
+            Authorization: `Bearer ${tokens.accessToken}` 
+          } 
+        },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+          detectSessionInUrl: false
+        }
+      });
+    } else {
+      console.log('⚠️ No anon key found, using access token as anon key');
+      return getSupabaseClient(tokens.accessToken, projectUrl);
+    }
     
   } catch (error) {
     console.error('❌ Failed to create authenticated Supabase client:', error);

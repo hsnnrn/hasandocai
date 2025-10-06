@@ -6,6 +6,8 @@
  */
 
 import { ipcMain } from 'electron';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { 
   initializeSupabase, 
   checkModelServerHealth, 
@@ -21,6 +23,10 @@ import { PDFAnalysisService } from './services/PDFAnalysisService';
 import { DOCXAnalysisService } from './services/DOCXAnalysisService';
 import { ExcelAnalysisService } from './services/ExcelAnalysisService';
 import { PowerPointAnalysisService } from './services/PowerPointAnalysisService';
+import { GroupAnalysisService } from './services/GroupAnalysisService';
+
+// Global token storage reference
+let tokenStorage: any = null;
 
 // Global state
 let isSupabaseInitialized = false;
@@ -29,6 +35,7 @@ let pdfAnalysisService: PDFAnalysisService | null = null;
 let docxAnalysisService: DOCXAnalysisService | null = null;
 let excelAnalysisService: ExcelAnalysisService | null = null;
 let powerpointAnalysisService: PowerPointAnalysisService | null = null;
+let groupAnalysisService: GroupAnalysisService | null = null;
 
 /**
  * Initialize Supabase connection
@@ -497,6 +504,134 @@ ipcMain.handle('pdf:getDocumentAnalysis', async (event, documentId: string) => {
 });
 
 /**
+ * Optimized PDF analysis handler - returns data in target format
+ */
+ipcMain.handle('pdf:analyzePDFOptimized', async (event, filePath: string, options?: {
+  generateCommentary?: boolean;
+  commentaryTypes?: string[];
+  language?: string;
+  userId?: string;
+  fileSource?: 'user-upload' | 'watched-folder' | 'imported';
+  processorVersion?: string;
+}) => {
+  console.log('pdf:analyzePDFOptimized handler called with filePath:', filePath);
+  
+  try {
+    if (!pdfAnalysisService) {
+      pdfAnalysisService = new PDFAnalysisService();
+    }
+
+    const pdfBuffer = await fs.readFile(filePath);
+    const result = await pdfAnalysisService.analyzePDFOptimized(
+      pdfBuffer, 
+      path.basename(filePath), 
+      filePath, 
+      options
+    );
+    
+    console.log('Optimized PDF analysis completed:', {
+      documentId: result.documentId,
+      processed: result.processed,
+      sectionCount: result.textSections.length,
+      documentType: result.structuredData.documentType,
+      tags: result.tags
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Optimized PDF analysis failed:', error);
+    return {
+      documentId: `error_${Date.now()}`,
+      title: `temp_${Date.now()}_${path.parse(filePath).name}`,
+      filename: path.basename(filePath),
+      filePath,
+      mimeType: 'application/pdf',
+      fileSize: 0,
+      checksum: 'sha256:error',
+      fileSource: options?.fileSource || 'user-upload',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      processed: false,
+      processorVersion: options?.processorVersion || 'ocr-v1.2',
+      language: options?.language || 'tr',
+      ocrConfidence: 0.1,
+      structuredData: {
+        documentType: 'document'
+      },
+      textSections: [],
+      tags: ['error'],
+      notes: error instanceof Error ? error.message : 'Unknown error',
+      ownerUserId: options?.userId || 'anonymous',
+      sensitivity: 'private' as const
+    };
+  }
+});
+
+/**
+ * Optimized PDF analysis handler for buffer input
+ */
+ipcMain.handle('pdf:analyzePDFBufferOptimized', async (event, buffer: Uint8Array, filename: string, filePath: string, options?: {
+  generateCommentary?: boolean;
+  commentaryTypes?: string[];
+  language?: string;
+  userId?: string;
+  fileSource?: 'user-upload' | 'watched-folder' | 'imported';
+  processorVersion?: string;
+}) => {
+  console.log('pdf:analyzePDFBufferOptimized handler called with filename:', filename);
+  
+  try {
+    if (!pdfAnalysisService) {
+      pdfAnalysisService = new PDFAnalysisService();
+    }
+
+    const pdfBuffer = Buffer.from(buffer);
+    const result = await pdfAnalysisService.analyzePDFOptimized(
+      pdfBuffer, 
+      filename, 
+      filePath, 
+      options
+    );
+    
+    console.log('Optimized PDF buffer analysis completed:', {
+      documentId: result.documentId,
+      processed: result.processed,
+      sectionCount: result.textSections.length,
+      documentType: result.structuredData.documentType,
+      tags: result.tags
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Optimized PDF buffer analysis failed:', error);
+    return {
+      documentId: `error_${Date.now()}`,
+      title: `temp_${Date.now()}_${path.parse(filename).name}`,
+      filename,
+      filePath,
+      mimeType: 'application/pdf',
+      fileSize: buffer.length,
+      checksum: 'sha256:error',
+      fileSource: options?.fileSource || 'user-upload',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      processed: false,
+      processorVersion: options?.processorVersion || 'ocr-v1.2',
+      language: options?.language || 'tr',
+      ocrConfidence: 0.1,
+      structuredData: {
+        documentType: 'document'
+      },
+      textSections: [],
+      tags: ['error'],
+      notes: error instanceof Error ? error.message : 'Unknown error',
+      ownerUserId: options?.userId || 'anonymous',
+      sensitivity: 'private' as const
+    };
+  }
+});
+
+/**
  * Search documents using semantic search
  */
 ipcMain.handle('pdf:searchDocuments', async (event, query: string, options?: {
@@ -583,6 +718,90 @@ ipcMain.handle('pdf:deleteDocument', async (event, documentId: string) => {
 
 console.log('BGE-M3 Embedding IPC handlers registered');
 console.log('PDF Analysis IPC handlers registered');
+
+/**
+ * Group Analysis IPC Handlers
+ */
+
+// Initialize Group Analysis Service
+ipcMain.handle('group:initializeGroupAnalysisService', async () => {
+  try {
+    console.log('🔧 Group Analysis Service handler called!');
+    console.log('Initializing Group Analysis Service...');
+    
+    if (!groupAnalysisService) {
+      groupAnalysisService = new GroupAnalysisService();
+      console.log('✅ Group Analysis Service initialized successfully');
+    } else {
+      console.log('✅ Group Analysis Service already initialized');
+    }
+    
+    return { 
+      success: true, 
+      message: 'Group Analysis Service initialized successfully' 
+    };
+  } catch (error) {
+    console.error('❌ Failed to initialize Group Analysis Service:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+});
+
+// Perform Group Analysis
+ipcMain.handle('group:analyzeGroup', async (event, groupData, analysisTypes) => {
+  try {
+    console.log('Starting group analysis for:', groupData.name);
+    
+    if (!groupAnalysisService) {
+      groupAnalysisService = new GroupAnalysisService();
+    }
+    
+    const results = await groupAnalysisService.analyzeGroup(groupData, analysisTypes);
+    
+    console.log('✅ Group analysis completed successfully');
+    return { 
+      success: true, 
+      results,
+      message: `Group analysis completed with ${results.length} results` 
+    };
+  } catch (error) {
+    console.error('Group analysis failed:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+});
+
+// Get Group Analysis Results
+ipcMain.handle('group:getGroupAnalysisResults', async (event, groupId) => {
+  try {
+    console.log('Getting group analysis results for:', groupId);
+    
+    if (!groupAnalysisService) {
+      groupAnalysisService = new GroupAnalysisService();
+    }
+    
+    const results = await groupAnalysisService.getGroupAnalysisResults(groupId);
+    
+    console.log('✅ Group analysis results retrieved successfully');
+    return { 
+      success: true, 
+      results,
+      message: `Retrieved ${results.length} analysis results` 
+    };
+  } catch (error) {
+    console.error('Failed to get group analysis results:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+});
+
+console.log('Group Analysis IPC handlers registered');
 
 /**
  * DOCX Analysis IPC Handlers
@@ -1384,6 +1603,138 @@ console.log('- excel:initializeService');
 console.log('- excel:analyzeExcelBuffer');
 console.log('- powerpoint:initializeService');
 console.log('- powerpoint:analyzePowerPointBuffer');
+
+// Initialize token storage
+const initializeTokenStorage = async () => {
+  if (!tokenStorage) {
+    const { createDefaultTokenStorage } = await import('./store');
+    tokenStorage = createDefaultTokenStorage();
+    console.log('Token storage initialized in ipc-handlers');
+  }
+  return tokenStorage;
+};
+
+// Supabase credentials handlers
+ipcMain.handle('auth:getSupabaseCredentials', async () => {
+  try {
+    console.log('🔍 Getting Supabase credentials...');
+    const storage = await initializeTokenStorage();
+    console.log('🔍 Token storage initialized:', !!storage);
+    
+    const tokens = await storage.getTokens();
+    console.log('🔍 Tokens retrieved:', !!tokens);
+    if (tokens) {
+      console.log('🔍 Access token preview:', tokens.accessToken ? tokens.accessToken.substring(0, 20) + '...' : 'null');
+    }
+    
+    if (!tokens) {
+      console.log('🔍 No tokens found, returning null');
+      return null;
+    }
+    
+    // Auth info'yu da al
+    const authInfo = await storage.getAuthInfo();
+    console.log('🔍 Auth info retrieved:', !!authInfo);
+    
+    const result = {
+      session: {
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        expires_at: tokens.expiresAt
+      },
+      user: authInfo ? { selectedProject: authInfo.selectedProject } : null
+    };
+    
+    console.log('🔍 Returning credentials:', {
+      hasAccessToken: !!result.session.access_token,
+      hasRefreshToken: !!result.session.refresh_token,
+      hasUser: !!result.user
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Error getting Supabase credentials:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('auth:saveSupabaseCredentials', async (event, credentials) => {
+  try {
+    const storage = await initializeTokenStorage();
+    
+    if (credentials?.session?.access_token) {
+      await storage.saveTokens({
+        accessToken: credentials.session.access_token,
+        refreshToken: credentials.session.refresh_token || '',
+        expiresAt: credentials.session.expires_at || Date.now() + 3600000, // 1 hour default
+        tokenType: 'Bearer',
+        scope: 'read write'
+      });
+      
+      // User bilgilerini ayrı olarak kaydet
+      if (credentials.user) {
+        await storage.saveAuthInfo({
+          selectedProject: credentials.user.selectedProject,
+          lastAuthTime: Date.now()
+        });
+      }
+      
+      console.log('✅ Supabase credentials saved successfully');
+      return { success: true };
+    } else {
+      return { success: false, error: 'Invalid credentials format' };
+    }
+  } catch (error) {
+    console.error('Error saving Supabase credentials:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to save credentials' 
+    };
+  }
+});
+
+ipcMain.handle('auth:clearSupabaseCredentials', async () => {
+  try {
+    const storage = await initializeTokenStorage();
+    
+    await storage.clearAll();
+    console.log('✅ Supabase credentials cleared successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('Error clearing Supabase credentials:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to clear credentials' 
+    };
+  }
+});
+
+ipcMain.handle('auth:saveAuthInfo', async (event, authInfo) => {
+  try {
+    const storage = await initializeTokenStorage();
+    
+    await storage.saveAuthInfo(authInfo);
+    console.log('✅ Auth info saved successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving auth info:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to save auth info' 
+    };
+  }
+});
+
+console.log('Auth IPC handlers registered:');
+console.log('- auth:getSupabaseCredentials');
+console.log('- auth:saveSupabaseCredentials');
+console.log('- auth:clearSupabaseCredentials');
+console.log('- auth:saveAuthInfo');
 console.log('- supabase:uploadAnalysis');
 console.log('- supabase:fetchProjects');
 console.log('- auth:saveAuthInfo');
+
+// Debug: Verify handler registration
+console.log('🔍 Verifying group:initializeGroupAnalysisService handler registration...');
+const handlers = ipcMain.listenerCount('group:initializeGroupAnalysisService');
+console.log(`📊 Handler count for group:initializeGroupAnalysisService: ${handlers}`);

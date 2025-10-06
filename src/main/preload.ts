@@ -74,6 +74,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   initializePDFService: () => ipcRenderer.invoke('pdf:initializeService'),
   analyzePDF: (filePath: string, options?: any) => ipcRenderer.invoke('pdf:analyzePDF', filePath, options),
   analyzePDFBuffer: (buffer: Uint8Array, filename: string, options?: any) => ipcRenderer.invoke('pdf:analyzePDFBuffer', buffer, filename, options),
+  analyzePDFOptimized: (filePath: string, options?: any) => ipcRenderer.invoke('pdf:analyzePDFOptimized', filePath, options),
+  analyzePDFBufferOptimized: (buffer: Uint8Array, filename: string, filePath: string, options?: any) => ipcRenderer.invoke('pdf:analyzePDFBufferOptimized', buffer, filename, filePath, options),
   getDocumentAnalysis: (documentId: string) => ipcRenderer.invoke('pdf:getDocumentAnalysis', documentId),
   searchDocuments: (query: string, options?: any) => ipcRenderer.invoke('pdf:searchDocuments', query, options),
   getDocuments: (options?: any) => ipcRenderer.invoke('pdf:getDocuments', options),
@@ -96,6 +98,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Auth Methods
   saveAuthInfo: (authInfo: any) => ipcRenderer.invoke('auth:saveAuthInfo', authInfo),
+  getSupabaseCredentials: () => ipcRenderer.invoke('auth:getSupabaseCredentials'),
+  saveSupabaseCredentials: (credentials: any) => ipcRenderer.invoke('auth:saveSupabaseCredentials', credentials),
+  clearSupabaseCredentials: () => ipcRenderer.invoke('auth:clearSupabaseCredentials'),
+
+  // Group Analysis Methods
+  initializeGroupAnalysisService: () => ipcRenderer.invoke('group:initializeGroupAnalysisService'),
+  analyzeGroup: (groupData: any, analysisTypes?: string[]) => ipcRenderer.invoke('group:analyzeGroup', groupData, analysisTypes),
+  getGroupAnalysisResults: (groupId: string) => ipcRenderer.invoke('group:getGroupAnalysisResults', groupId),
 });
 
 // Types for TypeScript
@@ -219,6 +229,50 @@ declare global {
         processingTime?: number;
         error?: string;
       }>;
+      analyzePDFOptimized: (filePath: string, options?: any) => Promise<{
+        documentId: string;
+        title: string;
+        filename: string;
+        filePath: string;
+        mimeType: string;
+        fileSize: number;
+        checksum: string;
+        fileSource: 'user-upload' | 'watched-folder' | 'imported';
+        createdAt: string;
+        updatedAt: string;
+        processed: boolean;
+        processorVersion: string;
+        language: string;
+        ocrConfidence: number;
+        structuredData: any;
+        textSections: any[];
+        tags: string[];
+        notes: string;
+        ownerUserId: string;
+        sensitivity: 'public' | 'private' | 'restricted';
+      }>;
+      analyzePDFBufferOptimized: (buffer: Uint8Array, filename: string, filePath: string, options?: any) => Promise<{
+        documentId: string;
+        title: string;
+        filename: string;
+        filePath: string;
+        mimeType: string;
+        fileSize: number;
+        checksum: string;
+        fileSource: 'user-upload' | 'watched-folder' | 'imported';
+        createdAt: string;
+        updatedAt: string;
+        processed: boolean;
+        processorVersion: string;
+        language: string;
+        ocrConfidence: number;
+        structuredData: any;
+        textSections: any[];
+        tags: string[];
+        notes: string;
+        ownerUserId: string;
+        sensitivity: 'public' | 'private' | 'restricted';
+      }>;
       getDocumentAnalysis: (documentId: string) => Promise<{ success: boolean; analysis?: any; error?: string }>;
       searchDocuments: (query: string, options?: any) => Promise<{ success: boolean; results?: any[]; error?: string }>;
       getDocuments: (options?: any) => Promise<{ success: boolean; documents?: any[]; error?: string }>;
@@ -278,6 +332,28 @@ declare global {
       // Auth Methods
       saveAuthInfo: (authInfo: any) => Promise<{
         success: boolean;
+        error?: string;
+      }>;
+      getSupabaseCredentials: () => Promise<any>;
+      saveSupabaseCredentials: (credentials: any) => Promise<void>;
+      clearSupabaseCredentials: () => Promise<void>;
+
+      // Group Analysis Methods
+      initializeGroupAnalysisService: () => Promise<{
+        success: boolean;
+        message?: string;
+        error?: string;
+      }>;
+      analyzeGroup: (groupData: any, analysisTypes?: string[]) => Promise<{
+        success: boolean;
+        results?: any[];
+        message?: string;
+        error?: string;
+      }>;
+      getGroupAnalysisResults: (groupId: string) => Promise<{
+        success: boolean;
+        results?: any[];
+        message?: string;
         error?: string;
       }>;
     };

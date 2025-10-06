@@ -1,8 +1,9 @@
-import fs from 'fs/promises';
-import path from 'path';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import * as pdfjsLib from 'pdfjs-dist';
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
+import { OptimizedDataService, OptimizedDocumentData } from './OptimizedDataService';
 
 // Configure PDF.js worker
 try {
@@ -13,6 +14,9 @@ try {
   // Fallback worker path
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
+
+// Additional PDF.js configuration for better compatibility
+pdfjsLib.GlobalWorkerOptions.workerPort = null;
 
 export interface PDFTextSection {
   id: string;
@@ -62,6 +66,7 @@ export class PDFAnalysisService {
   private supabase: any;
   private aiServerUrl: string;
   private tempDir: string;
+  private optimizedDataService: OptimizedDataService;
 
   constructor() {
     // Initialize Supabase client with mock configuration for testing
@@ -82,6 +87,7 @@ export class PDFAnalysisService {
     
     this.aiServerUrl = process.env.AI_SERVER_URL || 'http://localhost:7861';
     this.tempDir = path.join(process.cwd(), 'temp');
+    this.optimizedDataService = new OptimizedDataService();
     this.ensureTempDir();
   }
 
@@ -90,6 +96,51 @@ export class PDFAnalysisService {
       await fs.access(this.tempDir);
     } catch {
       await fs.mkdir(this.tempDir, { recursive: true });
+    }
+  }
+
+  /**
+   * Validate PDF buffer structure
+   */
+  private isValidPDFBuffer(buffer: Buffer): boolean {
+    try {
+      // Check minimum size
+      if (buffer.length < 100) {
+        console.warn('PDFAnalysisService: PDF buffer too small');
+        return false;
+      }
+
+      // Check PDF header
+      const header = buffer.toString('ascii', 0, 8);
+      if (!header.startsWith('%PDF-')) {
+        console.warn('PDFAnalysisService: Invalid PDF header:', header);
+        return false;
+      }
+
+      // Check for PDF trailer
+      const trailer = buffer.toString('ascii', buffer.length - 100);
+      if (!trailer.includes('%%EOF')) {
+        console.warn('PDFAnalysisService: PDF trailer not found');
+        return false;
+      }
+
+      // Check for basic PDF structure markers
+      const content = buffer.toString('ascii');
+      const hasObj = content.includes('obj');
+      const hasEndobj = content.includes('endobj');
+      const hasStream = content.includes('stream');
+      const hasEndstream = content.includes('endstream');
+
+      if (!hasObj || !hasEndobj || !hasStream || !hasEndstream) {
+        console.warn('PDFAnalysisService: Missing basic PDF structure markers');
+        return false;
+      }
+
+      console.log('PDFAnalysisService: PDF buffer validation passed');
+      return true;
+    } catch (error) {
+      console.error('PDFAnalysisService: PDF validation error:', error);
+      return false;
     }
   }
 
@@ -117,9 +168,22 @@ export class PDFAnalysisService {
     try {
       console.log('PDFAnalysisService: Starting PDF analysis for:', filename);
       
+      // Validate input parameters
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        throw new Error('PDF buffer is empty or invalid');
+      }
+
+      if (!filename || filename.trim().length === 0) {
+        throw new Error('Filename is required');
+      }
+
       // 1. PDF'den metin bölümlerini çıkar
       const textSections = await this.extractTextSections(pdfBuffer);
       console.log(`PDFAnalysisService: Extracted ${textSections.length} text sections`);
+
+      if (textSections.length === 0) {
+        throw new Error('No text content could be extracted from the PDF. The PDF might be image-based or corrupted.');
+      }
 
       // 2. Mock doküman kaydetme
       const documentId = await this.saveDocumentToSupabase(filename, textSections, userId);
@@ -132,12 +196,17 @@ export class PDFAnalysisService {
       // 4. AI yorumları oluştur ve kaydet
       let aiCommentary: AICommentary[] = [];
       if (generateCommentary) {
-        aiCommentary = await this.generateMockAICommentary(filename, textSections, commentaryTypes, language);
-        console.log(`PDFAnalysisService: Generated ${aiCommentary.length} AI commentary entries`);
-        
-        // AI yorumlarını Supabase'e kaydet
-        if (aiCommentary.length > 0) {
-          await this.saveAICommentaryToSupabase(documentId, aiCommentary);
+        try {
+          aiCommentary = await this.generateMockAICommentary(filename, textSections, commentaryTypes, language);
+          console.log(`PDFAnalysisService: Generated ${aiCommentary.length} AI commentary entries`);
+          
+          // AI yorumlarını Supabase'e kaydet
+          if (aiCommentary.length > 0) {
+            await this.saveAICommentaryToSupabase(documentId, aiCommentary);
+          }
+        } catch (commentaryError) {
+          console.warn('PDFAnalysisService: AI commentary generation failed, continuing without commentary:', commentaryError);
+          aiCommentary = [];
         }
       }
 
@@ -151,7 +220,7 @@ export class PDFAnalysisService {
         documentId,
         title: path.parse(filename).name,
         filename,
-        pageCount: Math.max(...textSections.map(s => s.pageNumber)),
+        pageCount: Math.max(...textSections.map(s => s.pageNumber), 1),
         textSections: savedSections,
         aiCommentary,
         processingTime,
@@ -160,6 +229,22 @@ export class PDFAnalysisService {
 
     } catch (error) {
       console.error('PDFAnalysisService: Analysis failed:', error);
+      const processingTime = Date.now() - startTime;
+      
+      // Provide more specific error messages
+      let errorMessage = 'Unknown error occurred during PDF analysis';
+      if (error instanceof Error) {
+        if (error.message.includes('Invalid PDF structure')) {
+          errorMessage = 'The PDF file appears to be corrupted or has an invalid structure. Please try with a different PDF file.';
+        } else if (error.message.includes('No text content')) {
+          errorMessage = 'The PDF does not contain extractable text. It might be image-based or password-protected.';
+        } else if (error.message.includes('PDF loading failed')) {
+          errorMessage = 'Failed to load the PDF file. The file might be corrupted or in an unsupported format.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
       return {
         documentId: '',
         title: path.parse(filename).name,
@@ -167,9 +252,9 @@ export class PDFAnalysisService {
         pageCount: 0,
         textSections: [],
         aiCommentary: [],
-        processingTime: Date.now() - startTime,
+        processingTime,
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMessage
       };
     }
   }
@@ -179,27 +264,127 @@ export class PDFAnalysisService {
    */
   private async extractTextSections(pdfBuffer: Buffer): Promise<PDFTextSection[]> {
     try {
+      // Validate PDF buffer first
+      if (!this.isValidPDFBuffer(pdfBuffer)) {
+        throw new Error('Invalid PDF structure: File is corrupted or not a valid PDF');
+      }
+
       const uint8Array = new Uint8Array(pdfBuffer);
-      const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
+      
+      // Try to load PDF with error handling
+      let pdf;
+      try {
+        // First attempt with worker
+        pdf = await pdfjsLib.getDocument({ 
+          data: uint8Array,
+          // disableWorker: false,
+          maxImageSize: 1024 * 1024,
+          isEvalSupported: false,
+          disableAutoFetch: false,
+          disableStream: false,
+          useWorkerFetch: false,
+          useSystemFonts: false,
+          standardFontDataUrl: undefined
+        }).promise;
+      } catch (pdfLoadError) {
+        console.warn('PDFAnalysisService: PDF loading with worker failed, trying without worker:', pdfLoadError);
+        
+        try {
+          // Second attempt without worker
+          pdf = await pdfjsLib.getDocument({ 
+            data: uint8Array,
+            // disableWorker: true,
+            maxImageSize: 1024 * 1024,
+            isEvalSupported: false,
+            disableAutoFetch: false,
+            disableStream: false
+          }).promise;
+        } catch (secondError) {
+          console.error('PDFAnalysisService: PDF loading failed completely:', secondError);
+          throw new Error(`PDF loading failed: ${secondError instanceof Error ? secondError.message : 'Unknown PDF loading error'}`);
+        }
+      }
+
       const pageCount = pdf.numPages;
+      console.log(`PDFAnalysisService: Successfully loaded PDF with ${pageCount} pages`);
       
       const allSections: PDFTextSection[] = [];
       let sectionIndex = 0;
 
       for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        
-        // Metin öğelerini grupla ve bölümlere ayır
-        const pageSections = this.groupTextIntoSection(textContent.items, pageNum, sectionIndex);
-        allSections.push(...pageSections);
-        sectionIndex += pageSections.length;
+        try {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          
+          // Metin öğelerini grupla ve bölümlere ayır
+          const pageSections = this.groupTextIntoSection(textContent.items, pageNum, sectionIndex);
+          allSections.push(...pageSections);
+          sectionIndex += pageSections.length;
+        } catch (pageError) {
+          console.warn(`PDFAnalysisService: Failed to process page ${pageNum}:`, pageError);
+          // Continue with other pages
+          continue;
+        }
+      }
+
+      if (allSections.length === 0) {
+        console.warn('PDFAnalysisService: No text sections extracted, trying fallback method');
+        return await this.extractTextSectionsFallback(pdfBuffer);
       }
 
       return allSections;
     } catch (error) {
       console.error('PDFAnalysisService: Text extraction failed:', error);
-      throw new Error(`PDF text extraction failed: ${error}`);
+      console.log('PDFAnalysisService: Attempting fallback extraction method');
+      
+      try {
+        return await this.extractTextSectionsFallback(pdfBuffer);
+      } catch (fallbackError) {
+        console.error('PDFAnalysisService: Fallback extraction also failed:', fallbackError);
+        throw new Error(`PDF text extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  }
+
+  /**
+   * Fallback text extraction method for problematic PDFs
+   */
+  private async extractTextSectionsFallback(pdfBuffer: Buffer): Promise<PDFTextSection[]> {
+    try {
+      console.log('PDFAnalysisService: Using fallback text extraction method');
+      
+      // Try with pdf-parse as fallback
+      const pdfParse = require('pdf-parse');
+      const data = await pdfParse(pdfBuffer);
+      
+      if (!data.text || data.text.trim().length === 0) {
+        throw new Error('No text content found in PDF');
+      }
+
+      // Split text into sections based on paragraphs
+      const paragraphs = data.text.split(/\n\s*\n/).filter((p: string) => p.trim().length > 0);
+      
+      const sections: PDFTextSection[] = paragraphs.map((paragraph: string, index: number) => ({
+        id: `fallback_section_${Date.now()}_${index}`,
+        pageNumber: 1, // Fallback method can't determine page numbers
+        content: paragraph.trim(),
+        contentType: 'paragraph' as const,
+        position: { x: 0, y: 0 },
+        formatting: {
+          fontSize: 12,
+          fontFamily: 'Arial',
+          isBold: false,
+          isItalic: false,
+          color: '000000'
+        },
+        orderIndex: index
+      }));
+
+      console.log(`PDFAnalysisService: Fallback extraction successful, found ${sections.length} sections`);
+      return sections;
+    } catch (error) {
+      console.error('PDFAnalysisService: Fallback extraction failed:', error);
+      throw new Error(`Fallback PDF text extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -1760,6 +1945,74 @@ export class PDFAnalysisService {
     } catch (error) {
       console.error('PDFAnalysisService: Failed to get document analysis:', error);
       return null;
+    }
+  }
+
+  /**
+   * Optimized PDF analysis that returns data in the target format
+   */
+  async analyzePDFOptimized(
+    pdfBuffer: Buffer,
+    filename: string,
+    filePath: string,
+    options: {
+      generateCommentary?: boolean;
+      commentaryTypes?: string[];
+      language?: string;
+      userId?: string;
+      fileSource?: 'user-upload' | 'watched-folder' | 'imported';
+      processorVersion?: string;
+    } = {}
+  ): Promise<OptimizedDocumentData> {
+    console.log('PDFAnalysisService: Starting optimized PDF analysis for:', filename);
+    
+    try {
+      // First perform regular analysis
+      const analysisResult = await this.analyzePDF(pdfBuffer, filename, options);
+      
+      // Transform to optimized format
+      const optimizedData = await this.optimizedDataService.transformToOptimizedFormat(
+        analysisResult,
+        filePath,
+        {
+          userId: options.userId,
+          fileSource: options.fileSource,
+          language: options.language,
+          processorVersion: options.processorVersion
+        }
+      );
+      
+      console.log('PDFAnalysisService: Optimized analysis completed successfully');
+      return optimizedData;
+      
+    } catch (error) {
+      console.error('PDFAnalysisService: Optimized analysis failed:', error);
+      
+      // Return minimal optimized data structure on error
+      return {
+        documentId: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        title: `temp_${Date.now()}_${path.parse(filename).name}`,
+        filename,
+        filePath,
+        mimeType: 'application/pdf',
+        fileSize: pdfBuffer.length,
+        checksum: `sha256:${require('crypto').createHash('sha256').update(pdfBuffer).digest('hex')}`,
+        fileSource: options.fileSource || 'user-upload',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        processed: false,
+        processorVersion: options.processorVersion || 'ocr-v1.2',
+        language: options.language || 'tr',
+        ocrConfidence: 0.1,
+        structuredData: {
+          documentType: 'document'
+        },
+        textSections: [],
+        tags: ['error'],
+        notes: error instanceof Error ? error.message : 'Unknown error',
+        ownerUserId: options.userId || 'anonymous',
+        sensitivity: 'private'
+      };
     }
   }
 

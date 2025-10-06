@@ -6,7 +6,7 @@ try {
   console.warn('Keytar not available, using electron-store only:', error);
 }
 
-import Store from 'electron-store';
+const Store = require('electron-store');
 
 /**
  * Token storage interface
@@ -33,6 +33,7 @@ export interface AuthInfo {
     ref: string;
   };
   lastAuthTime?: number;
+  anonKey?: string;
 }
 
 /**
@@ -49,7 +50,7 @@ export interface StorageStatus {
  * Token storage class with keytar and electron-store fallback
  */
 export class TokenStorage {
-  private store: Store;
+  private store: any;
   private serviceName: string;
   private accountName: string;
   private useKeytar: boolean;

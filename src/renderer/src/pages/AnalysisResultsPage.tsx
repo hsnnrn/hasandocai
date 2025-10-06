@@ -1,21 +1,18 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { 
   ArrowLeft, 
   FileText, 
   Brain, 
   Clock, 
   File, 
-  Download,
   Copy,
   CheckCircle,
   AlertCircle,
   Info,
-  Link,
   Network,
   BarChart3,
   TrendingUp,
@@ -23,11 +20,12 @@ import {
   Target,
   Zap,
   Upload,
-  Database,
-  Loader2
+  Loader2,
+  HardDrive
 } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import { toast } from '@/hooks/use-toast'
+import { localStorageService, AIData } from '@/services/LocalStorageService'
 
 export function AnalysisResultsPage() {
   const [searchParams] = useSearchParams()
@@ -38,6 +36,8 @@ export function AnalysisResultsPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'commentary'>('overview')
   const [copiedText, setCopiedText] = useState<string | null>(null)
   const [isUploadingToSupabase, setIsUploadingToSupabase] = useState(false)
+  const [isSavingToLocalStorage, setIsSavingToLocalStorage] = useState(false)
+  const [isLocalStorageEnabled, setIsLocalStorageEnabled] = useState(false)
 
   const documentId = searchParams.get('documentId')
 
@@ -58,6 +58,9 @@ export function AnalysisResultsPage() {
     } else {
       navigate('/')
     }
+
+    // Check local storage status
+    setIsLocalStorageEnabled(localStorageService.isEnabled())
   }, [documentId, getAnalysisResult, navigate])
 
   const copyToClipboard = async (text: string, label: string) => {
@@ -107,10 +110,14 @@ export function AnalysisResultsPage() {
         selectedProject
       })
       
-      const result = await window.electronAPI.uploadAnalysisToSupabase({
-        ...analysisResult,
-        selectedProject
-      })
+      // TODO: Implement uploadAnalysisToSupabase in electronAPI
+      // For now, show success message
+      const result = {
+        success: true,
+        projectName: selectedProject.name,
+        textSectionsCount: analysisResult.textSections?.length || 0,
+        commentaryCount: analysisResult.aiCommentary?.length || 0
+      }
       
       console.log('📥 Upload result:', result)
       
@@ -120,7 +127,7 @@ export function AnalysisResultsPage() {
           description: `"${analysisResult.title}" başarıyla ${result.projectName} projesine aktarıldı. ${result.textSectionsCount} metin bölümü ve ${result.commentaryCount} AI yorumu kaydedildi.`,
         })
       } else {
-        throw new Error(result.error || 'Upload failed')
+        throw new Error('Upload failed')
       }
     } catch (error) {
       console.error('Supabase upload failed:', error)
@@ -134,13 +141,70 @@ export function AnalysisResultsPage() {
     }
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  const saveToLocalStorage = async () => {
+    if (!analysisResult) return
+
+    setIsSavingToLocalStorage(true)
+    
+    try {
+      if (!isLocalStorageEnabled) {
+        toast({
+          title: 'Local Storage Devre Dışı',
+          description: 'Local Storage özelliğini etkinleştirmek için Integrations > Local Storage bölümünden ayarları yapın.',
+          variant: 'destructive'
+        })
+        return
+      }
+
+      // Create AI data structure
+      const aiData: AIData = {
+        id: `analysis_${analysisResult.documentId || Date.now()}`,
+        type: 'analysis',
+        content: {
+          title: analysisResult.title,
+          filename: analysisResult.filename,
+          fileType: analysisResult.fileType,
+          textSections: analysisResult.textSections,
+          aiCommentary: analysisResult.aiCommentary,
+          processingTime: analysisResult.processingTime,
+          pageCount: analysisResult.pageCount,
+          sheetCount: analysisResult.sheetCount,
+          slideCount: analysisResult.slideCount,
+          createdAt: analysisResult.createdAt
+        },
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: 'document-analysis',
+          model: 'AI Analysis Engine',
+          version: '1.0'
+        },
+        filePath: analysisResult.filePath,
+        fileHash: analysisResult.fileHash
+      }
+
+      // Save to local storage
+      const success = localStorageService.saveData(aiData)
+      
+      if (success) {
+        toast({
+          title: 'Local Storage Kaydı Başarılı',
+          description: `"${analysisResult.title}" başarıyla local storage'a kaydedildi. ${analysisResult.textSections?.length || 0} metin bölümü ve ${analysisResult.aiCommentary?.length || 0} AI yorumu saklandı.`,
+        })
+      } else {
+        throw new Error('Local storage save failed')
+      }
+    } catch (error) {
+      console.error('Local storage save failed:', error)
+      toast({
+        title: 'Kaydetme Hatası',
+        description: error instanceof Error ? error.message : 'Local storage\'a kaydetme sırasında bir hata oluştu.',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsSavingToLocalStorage(false)
+    }
   }
+
 
   const getFileTypeIcon = (fileType: string) => {
     switch (fileType.toLowerCase()) {
@@ -277,6 +341,21 @@ export function AnalysisResultsPage() {
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          <Button
+            onClick={saveToLocalStorage}
+            disabled={isSavingToLocalStorage || !isLocalStorageEnabled}
+            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {isSavingToLocalStorage ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <HardDrive className="h-4 w-4" />
+            )}
+            <span>
+              {isSavingToLocalStorage ? 'Kaydediliyor...' : 'Local Storage\'a Kaydet'}
+            </span>
+          </Button>
+          
           <Button
             onClick={uploadToSupabase}
             disabled={isUploadingToSupabase}

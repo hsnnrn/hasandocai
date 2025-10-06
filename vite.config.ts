@@ -7,11 +7,37 @@ export default defineConfig({
   plugins: [react()],
   root: './src/renderer',
   optimizeDeps: {
-    force: true
+    force: true,
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@supabase/supabase-js',
+      'zustand',
+      'lucide-react'
+    ],
+    exclude: ['electron']
   },
   build: {
     outDir: '../../dist/renderer',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom'],
+          supabase: ['@supabase/supabase-js'],
+          ui: ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu']
+        }
+      }
+    },
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true
+      }
+    }
   },
   resolve: {
     alias: {
@@ -27,5 +53,12 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    hmr: {
+      overlay: false
+    }
   },
+  esbuild: {
+    target: 'es2020',
+    logOverride: { 'this-is-undefined-in-esm': 'silent' }
+  }
 })

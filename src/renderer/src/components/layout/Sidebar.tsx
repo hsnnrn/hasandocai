@@ -10,15 +10,25 @@ import {
   ChevronDown,
   ChevronRight,
   CheckCircle,
+  HardDrive,
+  FolderOpen,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { SupabaseLoginModal } from '@/components/SupabaseLoginModal'
+import { LocalStorageModal } from '@/components/LocalStorageModal'
+import { StorageCleanupModal } from '@/components/StorageCleanupModal'
+import { useNavigate } from 'react-router-dom'
 
 const navItems = [
   {
     name: 'Converter',
     href: '/',
     icon: FileText,
+  },
+  {
+    name: 'Groups',
+    href: '/groups',
+    icon: FolderOpen,
   },
   {
     name: 'History',
@@ -38,12 +48,17 @@ const navItems = [
 ]
 
 export function Sidebar() {
+  const navigate = useNavigate()
   const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false)
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false)
+  const [isLocalStorageModalOpen, setIsLocalStorageModalOpen] = useState(false)
+  const [isStorageCleanupModalOpen, setIsStorageCleanupModalOpen] = useState(false)
+  const [isLocalStorageDropdownOpen, setIsLocalStorageDropdownOpen] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false)
   const [userInfo, setUserInfo] = useState<any>(null)
+  const [isLocalStorageEnabled, setIsLocalStorageEnabled] = useState<boolean>(false)
 
-  // Check login status on component mount
+  // Check login status and local storage status on component mount
   useEffect(() => {
     const savedLogin = localStorage.getItem('supabase-login')
     if (savedLogin) {
@@ -56,12 +71,16 @@ export function Sidebar() {
         localStorage.removeItem('supabase-login')
       }
     }
+
+    // Check local storage status
+    const localStorageEnabled = localStorage.getItem('local-storage-enabled')
+    setIsLocalStorageEnabled(localStorageEnabled === 'true')
   }, [])
 
   // Listen for storage changes and custom events (when login status changes)
   useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
-      // Only handle supabase-login changes
+      // Handle supabase-login changes
       if (event.key === 'supabase-login') {
         console.log('Storage change detected for supabase-login:', event.newValue)
         if (event.newValue) {
@@ -79,6 +98,12 @@ export function Sidebar() {
           setIsLoggedIn(false)
           setUserInfo(null)
         }
+      }
+      
+      // Handle local-storage-enabled changes
+      if (event.key === 'local-storage-enabled') {
+        console.log('Storage change detected for local-storage-enabled:', event.newValue)
+        setIsLocalStorageEnabled(event.newValue === 'true')
       }
     }
 
@@ -163,6 +188,51 @@ export function Sidebar() {
                   )}
                 </button>
                 
+                {/* Local Storage with Dropdown */}
+                <div className="w-full">
+                  <button 
+                    onClick={() => setIsLocalStorageDropdownOpen(!isLocalStorageDropdownOpen)}
+                    className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent w-full transition-colors"
+                  >
+                    <HardDrive className="h-4 w-4 text-blue-500" />
+                    <span>Local Storage</span>
+                    {isLocalStorageEnabled && (
+                      <CheckCircle className="h-3 w-3 text-green-500" />
+                    )}
+                    {isLocalStorageDropdownOpen ? (
+                      <ChevronDown className="h-3 w-3 ml-auto" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3 ml-auto" />
+                    )}
+                  </button>
+                  
+                  {isLocalStorageDropdownOpen && (
+                    <div className="ml-6 mt-1 space-y-1">
+                      <button 
+                        onClick={() => {
+                          setIsLocalStorageModalOpen(true)
+                          setIsLocalStorageDropdownOpen(false)
+                        }}
+                        className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent w-full transition-colors"
+                      >
+                        <HardDrive className="h-4 w-4 text-blue-500" />
+                        <span>Storage Settings</span>
+                      </button>
+                      
+                      <button 
+                        onClick={() => {
+                          setIsStorageCleanupModalOpen(true)
+                          setIsLocalStorageDropdownOpen(false)
+                        }}
+                        className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent w-full transition-colors"
+                      >
+                        <HardDrive className="h-4 w-4 text-orange-500" />
+                        <span>Storage Cleanup</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
               </div>
             )}
           </div>
@@ -199,6 +269,27 @@ export function Sidebar() {
             setUserInfo(null)
           }
         }}
+      />
+
+      {/* Local Storage Modal */}
+      <LocalStorageModal
+        isOpen={isLocalStorageModalOpen}
+        onClose={() => {
+          setIsLocalStorageModalOpen(false)
+          // Check local storage status when modal closes
+          const localStorageEnabled = localStorage.getItem('local-storage-enabled')
+          setIsLocalStorageEnabled(localStorageEnabled === 'true')
+        }}
+        onViewData={() => {
+          setIsLocalStorageModalOpen(false)
+          navigate('/local-storage')
+        }}
+      />
+
+      {/* Storage Cleanup Modal */}
+      <StorageCleanupModal
+        isOpen={isStorageCleanupModalOpen}
+        onClose={() => setIsStorageCleanupModalOpen(false)}
       />
     </div>
   )

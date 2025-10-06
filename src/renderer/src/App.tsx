@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
 import { HomePage } from './pages/HomePage'
+import { GroupsPage } from './pages/GroupsPage'
+import { GroupManagementPage } from './pages/GroupManagementPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { TemplatesPage } from './pages/TemplatesPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { AnalysisResultsPage } from './pages/AnalysisResultsPage'
+import { LocalStorageViewPage } from './pages/LocalStorageViewPage'
 import { Toaster } from './components/ui/toaster'
 import { useAppStore } from './store/appStore'
 import { Loader2 } from 'lucide-react'
@@ -43,10 +46,14 @@ function App() {
         <Layout>
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/groups" element={<GroupsPage />} />
+            <Route path="/groups/:groupId" element={<GroupManagementPage />} />
+            <Route path="/groups/:groupId/analysis" element={<GroupManagementPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/templates" element={<TemplatesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/results" element={<AnalysisResultsPage />} />
+            <Route path="/local-storage" element={<LocalStorageViewPage />} />
           </Routes>
         </Layout>
       </Router>

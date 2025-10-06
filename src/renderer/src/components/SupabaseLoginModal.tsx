@@ -2,13 +2,19 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, X, CheckCircle, Loader2 } from 'lucide-react'
 import { auth } from '@/lib/supabase'
 
-// Extend Window interface to include supabaseAPI
+// Extend Window interface to include supabaseAPI and electronAPI
 declare global {
   interface Window {
     supabaseAPI: {
       startSupabaseAuth: (options: { method?: 'local' | 'custom'; preferExternal?: boolean }) => Promise<any>
       getAuthStatus: () => Promise<any>
       logoutSupabase: () => Promise<any>
+    }
+    electronAPI: {
+      saveAuthInfo: (authInfo: any) => Promise<void>
+      getSupabaseCredentials: () => Promise<any>
+      saveSupabaseCredentials: (credentials: any) => Promise<void>
+      clearSupabaseCredentials: () => Promise<void>
     }
   }
 }
@@ -89,6 +95,52 @@ export function SupabaseLoginModal({ isOpen, onClose }: SupabaseLoginModalProps)
     }
 
     checkAuthStatus()
+
+    // Auth state değişikliklerini dinle
+    const { data: { subscription } } = auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session)
+      
+      if (event === 'SIGNED_IN' && session) {
+        console.log('✅ User signed in:', session.user)
+        const userData = {
+          user: session.user,
+          session: session,
+          timestamp: Date.now()
+        }
+        setIsLoggedIn(true)
+        setUserInfo(userData)
+        localStorage.setItem('supabase-login', JSON.stringify(userData))
+        
+        // Dispatch custom event
+        window.dispatchEvent(new CustomEvent('supabase-login-changed', {
+          detail: { isLoggedIn: true, userInfo: userData }
+        }))
+      } else if (event === 'SIGNED_OUT') {
+        console.log('❌ User signed out')
+        setIsLoggedIn(false)
+        setUserInfo(null)
+        localStorage.removeItem('supabase-login')
+        
+        // Dispatch custom event
+        window.dispatchEvent(new CustomEvent('supabase-login-changed', {
+          detail: { isLoggedIn: false, userInfo: null }
+        }))
+      } else if (event === 'TOKEN_REFRESHED' && session) {
+        console.log('🔄 Token refreshed:', session.user)
+        const userData = {
+          user: session.user,
+          session: session,
+          timestamp: Date.now()
+        }
+        setUserInfo(userData)
+        localStorage.setItem('supabase-login', JSON.stringify(userData))
+      }
+    })
+
+    // Cleanup subscription
+    return () => {
+      subscription?.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
@@ -133,18 +185,89 @@ export function SupabaseLoginModal({ isOpen, onClose }: SupabaseLoginModalProps)
         console.log('OAuth successful:', result)
         
         // Gerçek kullanıcı bilgilerini kullan
-        const userInfo = {
-          user: result.user || {
-            email: 'user@supabase.com',
-            user_metadata: {
-              full_name: 'Supabase User'
+        let userInfo;
+        
+        console.log('🔍 OAuth result:', result)
+        console.log('🔍 OAuth result.user:', result.user)
+        console.log('🔍 OAuth result.access_token:', result.access_token ? 'Present' : 'Missing')
+        
+        if (result.user) {
+          // Gerçek kullanıcı bilgileri varsa onları kullan
+          userInfo = {
+            user: result.user,
+            session: {
+              access_token: result.access_token,
+              refresh_token: result.refresh_token
+            },
+            timestamp: Date.now()
+          }
+          console.log('✅ Using OAuth result user data:', userInfo.user)
+          console.log('✅ OAuth access token present:', !!result.access_token)
+          
+          // ✅ Gerçek access token'ı main process'e kaydet
+          if (result.access_token) {
+            try {
+              await window.electronAPI.saveSupabaseCredentials({
+                session: {
+                  access_token: result.access_token,
+                  refresh_token: result.refresh_token,
+                  expires_at: Date.now() + 3600000 // 1 hour default
+                },
+                user: result.user
+              })
+              console.log('✅ Real access token saved to main process')
+            } catch (saveError) {
+              console.warn('⚠️ Failed to save access token to main process:', saveError)
             }
-          },
-          session: {
-            access_token: 'authenticated',
-            refresh_token: 'authenticated'
-          },
-          timestamp: Date.now()
+          } else {
+            console.warn('⚠️ No access token received from OAuth result')
+          }
+        } else {
+          // Gerçek kullanıcı bilgileri yoksa Supabase session'ından al
+          try {
+            const { session, error } = await auth.getSession()
+            if (error) {
+              console.error('Error getting session:', error)
+              throw new Error('Failed to get user session')
+            }
+            
+            if (session?.user) {
+              userInfo = {
+                user: session.user,
+                session: {
+                  access_token: session.access_token,
+                  refresh_token: session.refresh_token
+                },
+                timestamp: Date.now()
+              }
+              console.log('✅ Using Supabase session user data:', userInfo.user)
+              
+              // ✅ Gerçek access token'ı main process'e kaydet
+              if (session.access_token) {
+                try {
+                  await window.electronAPI.saveSupabaseCredentials({
+                    session: {
+                      access_token: session.access_token,
+                      refresh_token: session.refresh_token,
+                      expires_at: Date.now() + 3600000 // 1 hour default
+                    },
+                    user: session.user
+                  })
+                  console.log('✅ Real access token from session saved to main process')
+                } catch (saveError) {
+                  console.warn('⚠️ Failed to save session access token to main process:', saveError)
+                }
+              } else {
+                console.warn('⚠️ No access token found in Supabase session')
+              }
+            } else {
+              throw new Error('No user session found')
+            }
+          } catch (sessionError) {
+            console.error('Session error:', sessionError)
+            setError('Failed to get user information: ' + (sessionError as Error).message)
+            return
+          }
         }
         
         // Projeleri al ve göster
@@ -462,6 +585,20 @@ export function SupabaseLoginModal({ isOpen, onClose }: SupabaseLoginModalProps)
                 </p>
               </div>
               
+              
+              {/* User Info Display */}
+              {userInfo?.user && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
+                  <h3 className="font-medium text-gray-900 text-sm">User Information:</h3>
+                  <div className="text-xs text-gray-600 space-y-1">
+                    <div><strong>Email:</strong> {userInfo.user.email || 'N/A'}</div>
+                    <div><strong>ID:</strong> {userInfo.user.id || 'N/A'}</div>
+                    <div><strong>Name:</strong> {userInfo.user.user_metadata?.full_name || userInfo.user.user_metadata?.name || 'N/A'}</div>
+                    <div><strong>Provider:</strong> {userInfo.user.app_metadata?.provider || 'N/A'}</div>
+                    <div><strong>Created:</strong> {userInfo.user.created_at ? new Date(userInfo.user.created_at).toLocaleDateString() : 'N/A'}</div>
+                  </div>
+                </div>
+              )}
               
               {/* Logout Button */}
               <button

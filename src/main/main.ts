@@ -268,7 +268,7 @@ async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
   redirectUri: string
-): Promise<{ success: boolean; tokens?: any; error?: string }> {
+): Promise<{ success: boolean; tokens?: any; anonKey?: string; error?: string }> {
   try {
     const tokenUrl = 'https://api.supabase.com/v1/oauth/token';
     const clientId = process.env.SUPABASE_OAUTH_CLIENT_ID;
@@ -307,6 +307,7 @@ async function exchangeCodeForToken(
 
     const tokenResponse = await response.json();
     console.log('Token exchange successful');
+    console.log('🔍 Token response:', JSON.stringify(tokenResponse, null, 2));
 
     // Prepare token data
     const tokens = {
@@ -316,10 +317,43 @@ async function exchangeCodeForToken(
       tokenType: tokenResponse.token_type || 'Bearer',
       scope: tokenResponse.scope || ''
     };
+    
+    console.log('🔍 Prepared tokens:', {
+      hasAccessToken: !!tokens.accessToken,
+      hasRefreshToken: !!tokens.refreshToken,
+      accessTokenPreview: tokens.accessToken ? tokens.accessToken.substring(0, 20) + '...' : 'null'
+    });
+
+    // Try to get anon key from Management API
+    let anonKey = null;
+    try {
+      console.log('🔑 Fetching anon key from Management API...');
+      const anonKeyResponse = await fetch('https://api.supabase.com/v1/projects/' + process.env.SUPABASE_PROJECT_REF + '/api-keys', {
+        headers: {
+          'Authorization': `Bearer ${tokens.accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (anonKeyResponse.ok) {
+        const anonKeyData = await anonKeyResponse.json();
+        anonKey = anonKeyData.find((key: any) => key.name === 'anon')?.api_key;
+        if (anonKey) {
+          console.log('✅ Anon key retrieved from Management API');
+        } else {
+          console.warn('⚠️ No anon key found in Management API response');
+        }
+      } else {
+        console.warn('⚠️ Failed to fetch anon key from Management API:', anonKeyResponse.status);
+      }
+    } catch (error) {
+      console.warn('⚠️ Error fetching anon key:', error);
+    }
 
     return {
       success: true,
-      tokens
+      tokens,
+      anonKey
     };
 
   } catch (error) {
@@ -415,7 +449,7 @@ app.whenReady().then(async () => {
     console.log('OAuth server instance created');
     
     // Start OAuth server
-    const oauthPort = parseInt(process.env.OAUTH_PORT || '3000');
+    const oauthPort = parseInt(process.env.OAUTH_PORT || '54321');
     console.log('Starting OAuth server on port:', oauthPort);
     await oauthServer.start(oauthPort);
     console.log('OAuth server started successfully');
@@ -423,10 +457,6 @@ app.whenReady().then(async () => {
     // Register custom protocol
     registerCustomProtocol();
     console.log('Custom protocol registered');
-    
-    // Import and register IPC handlers
-    await import('./ipc-handlers');
-    console.log('IPC handlers registered');
     
     console.log('OAuth services initialized successfully');
   } catch (error) {
@@ -474,6 +504,14 @@ if (!gotTheLock) {
   app.quit();
 }
 
+// Import and register IPC handlers early - synchronous import
+try {
+  require('./ipc-handlers');
+  console.log('✅ IPC handlers registered early');
+} catch (error) {
+  console.error('❌ Failed to register IPC handlers early:', error);
+}
+
 // IPC Handlers
 
 // Supabase Management API - User Info fetching
@@ -493,6 +531,22 @@ ipcMain.handle('supabase:fetchUserInfo', async () => {
         error: 'No valid access token available'
       };
     }
+
+    // Token formatını kontrol et
+    console.log('🔍 Token validation - Length:', tokens.accessToken.length);
+    console.log('🔍 Token validation - Preview:', tokens.accessToken.substring(0, 50) + '...');
+    
+    // JWT formatını kontrol et (3 parça olmalı)
+    const tokenParts = tokens.accessToken.split('.');
+    if (tokenParts.length !== 3) {
+      console.error('❌ Invalid JWT format - expected 3 parts, got:', tokenParts.length);
+      return {
+        ok: false,
+        error: 'Invalid access token format'
+      };
+    }
+    
+    console.log('✅ Token format is valid JWT');
 
     console.log('🔍 Fetching user info from Supabase Management API...');
     
@@ -612,6 +666,22 @@ ipcMain.handle('supabase:fetchProjects', async () => {
         error: 'No valid access token available'
       };
     }
+
+    // Token formatını kontrol et
+    console.log('🔍 Projects API - Token validation - Length:', tokens.accessToken.length);
+    console.log('🔍 Projects API - Token validation - Preview:', tokens.accessToken.substring(0, 50) + '...');
+    
+    // JWT formatını kontrol et (3 parça olmalı)
+    const tokenParts = tokens.accessToken.split('.');
+    if (tokenParts.length !== 3) {
+      console.error('❌ Projects API - Invalid JWT format - expected 3 parts, got:', tokenParts.length);
+      return {
+        ok: false,
+        error: 'Invalid access token format'
+      };
+    }
+    
+    console.log('✅ Projects API - Token format is valid JWT');
 
     console.log('Fetching projects from Supabase Management API...');
     
@@ -847,7 +917,8 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
     authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('response_type', 'code');
-    // Scope'lar OAuth uygulaması oluştururken ayarlanıyor, URL'de göndermeye gerek yok
+    // Kullanıcı bilgilerine erişim için gerekli scope'lar
+    authUrl.searchParams.set('scope', 'read write user:read user:write profile:read profile:write');
     authUrl.searchParams.set('code_challenge', pkcePair.codeChallenge);
     authUrl.searchParams.set('code_challenge_method', pkcePair.codeChallengeMethod);
     authUrl.searchParams.set('state', state);
@@ -871,6 +942,19 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
         // Token'ları güvenli şekilde sakla
         if (tokenStorage) {
           await tokenStorage.saveTokens(tokenResult.tokens);
+          console.log('✅ Tokens saved to tokenStorage');
+          
+          // Anon key'i de kaydet
+          if (tokenResult.anonKey) {
+            const authInfo = await tokenStorage.getAuthInfo() || {};
+            await tokenStorage.saveAuthInfo({
+              ...authInfo,
+              anonKey: tokenResult.anonKey
+            });
+            console.log('✅ Anon key saved to tokenStorage');
+          }
+        } else {
+          console.warn('⚠️ tokenStorage is null, tokens not saved');
         }
         
             // JWT token'ı decode ederek gerçek kullanıcı bilgilerini al
@@ -895,27 +979,87 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
                   console.log('🔍 JWT Debug - Sub:', payload.sub);
                   console.log('🔍 JWT Debug - User metadata:', payload.user_metadata);
                   console.log('🔍 JWT Debug - App metadata:', payload.app_metadata);
+                  console.log('🔍 JWT Debug - All payload keys:', Object.keys(payload));
+                  console.log('🔍 JWT Debug - Email from different fields:', {
+                    email: payload.email,
+                    email_address: payload.email_address,
+                    user_email: payload.user_email,
+                    preferred_username: payload.preferred_username,
+                    username: payload.username
+                  });
                 
-                // JWT decode başarılı, kullanıcı bilgilerini al
-                if (payload.email) {
-                  console.log('JWT decode successful, using JWT data');
+                // JWT decode başarılı, şimdi gerçek kullanıcı bilgilerini Management API'den al
+                const userEmail = payload.email || payload.email_address || payload.user_email || payload.preferred_username;
+                if (userEmail) {
+                  console.log('JWT decode successful, fetching real user data from Management API...');
+                  console.log('🔍 Using email from JWT:', userEmail);
                   
-                  // JWT'den kullanıcı bilgilerini aldıktan sonra da gerçek projeleri al
+                  // Önce gerçek kullanıcı bilgilerini Management API'den al
+                  let realUserData: any = null;
                   let projects: any[] = [];
                   let organizations: any[] = [];
                   
                   try {
-                    // Önce organizasyonları al - farklı endpoint'ler dene
-                    console.log('Fetching organizations from JWT flow...');
+                    // Gerçek kullanıcı bilgilerini al - farklı endpoint'ler dene
+                    console.log('Fetching real user data from Management API...');
                     console.log('Token preview:', tokenResult.tokens.accessToken.substring(0, 50) + '...');
                     
-                    // Farklı endpoint'ler dene - Supabase Management API
+                    const userEndpoints = [
+                      'https://api.supabase.com/v1/user',
+                      'https://api.supabase.com/v1/me',
+                      'https://api.supabase.com/platform/profile',
+                      'https://api.supabase.com/platform/user',
+                      'https://api.supabase.com/v1/profile',
+                      'https://api.supabase.com/v1/account',
+                      'https://api.supabase.com/platform/account'
+                    ];
+                    
+                    for (const endpoint of userEndpoints) {
+                      try {
+                        console.log(`Trying user endpoint: ${endpoint}`);
+                        const userResponse = await fetch(endpoint, {
+                          headers: {
+                            'Authorization': `Bearer ${tokenResult.tokens.accessToken}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                          }
+                        });
+                        
+                        console.log(`User API response status for ${endpoint}: ${userResponse.status}`);
+                        
+                        if (userResponse.ok) {
+                          realUserData = await userResponse.json();
+                          console.log(`✅ Real user data retrieved from ${endpoint}:`, JSON.stringify(realUserData, null, 2));
+                          break;
+                        } else {
+                          const errorText = await userResponse.text();
+                          console.warn(`User endpoint ${endpoint} failed: ${userResponse.status} - ${errorText}`);
+                        }
+                      } catch (error) {
+                        console.warn(`Error fetching from ${endpoint}:`, error);
+                      }
+                    }
+                    
+                    // Eğer gerçek kullanıcı bilgileri alınamazsa JWT'den fallback yap
+                    if (!realUserData) {
+                      console.warn('Failed to get real user data from Management API, using JWT fallback');
+                      realUserData = {
+                        id: payload.sub || payload.user_id || 'user_' + Date.now(),
+                        email: userEmail,
+                        name: payload.name || userEmail?.split('@')[0] || 'Supabase User',
+                        user_metadata: payload.user_metadata || {
+                          full_name: payload.name || userEmail?.split('@')[0] || 'Supabase User'
+                        },
+                        app_metadata: payload.app_metadata || {}
+                      };
+                    }
+                    
+                    // Şimdi organizasyonları al
+                    console.log('Fetching organizations...');
                     const orgEndpoints = [
                       'https://api.supabase.com/v1/organizations',
                       'https://api.supabase.com/platform/organizations',
-                      'https://api.supabase.com/v1/me/organizations',
-                      'https://api.supabase.com/v1/me',
-                      'https://api.supabase.com/platform/profile'
+                      'https://api.supabase.com/v1/me/organizations'
                     ];
                     
                     let orgsResponse: Response | null = null;
@@ -932,60 +1076,37 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
                           }
                         });
                         
-                        console.log(`Response status for ${endpoint}: ${orgsResponse.status}`);
-                        console.log(`Response headers:`, Object.fromEntries(orgsResponse.headers.entries()));
-                        
                         if (orgsResponse.ok) {
                           workingEndpoint = endpoint;
                           break;
                         } else {
                           const errorText = await orgsResponse.text();
-                          console.warn(`Failed to fetch from ${endpoint}, status: ${orgsResponse.status}, error: ${errorText}`);
-                          console.warn(`Error response headers:`, Object.fromEntries(orgsResponse.headers.entries()));
+                          console.warn(`Organizations endpoint ${endpoint} failed: ${orgsResponse.status} - ${errorText}`);
                         }
                       } catch (error) {
                         console.warn(`Error fetching from ${endpoint}:`, error);
                       }
                     }
                     
-                    console.log(`Organizations API response status: ${orgsResponse?.status || 'No response'}`);
-                    
                     if (orgsResponse && orgsResponse.ok) {
-                      const responseText = await orgsResponse.text();
-                      console.log(`Response body from ${workingEndpoint}:`, responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''));
+                      const orgsData = await orgsResponse.json();
+                      organizations = orgsData.organizations || orgsData || [];
+                      console.log(`✅ Organizations retrieved from ${workingEndpoint}:`, organizations.length);
                       
-                      try {
-                        const orgsData = JSON.parse(responseText);
-                        organizations = orgsData.organizations || orgsData || [];
-                        console.log('Organizations retrieved:', organizations);
-                        console.log(`Working endpoint: ${workingEndpoint}`);
-                      } catch (parseError) {
-                        console.warn('Failed to parse organizations response:', parseError);
-                        console.warn('Raw response:', responseText);
-                      }
-                      
-                      // Her organizasyon için projeleri al - farklı endpoint'ler dene
+                      // Her organizasyon için projeleri al
                       for (const org of organizations) {
                         try {
                           console.log(`Fetching projects for organization: ${org.id} (${org.name})`);
                           
-                    // Farklı proje endpoint'lerini dene - Supabase Management API
-                    const projectEndpoints = [
-                      `https://api.supabase.com/v1/organizations/${org.id}/projects`,
-                      `https://api.supabase.com/platform/organizations/${org.id}/projects`,
-                      `https://api.supabase.com/v1/projects?organization_id=${org.id}`,
-                      `https://api.supabase.com/v1/projects`,
-                      `https://api.supabase.com/platform/projects`,
-                      `https://api.supabase.com/v1/me/projects`
-                    ];
-                          
-                          let orgProjectsResponse: Response | null = null;
-                          let projectsFound = false;
+                          const projectEndpoints = [
+                            `https://api.supabase.com/v1/organizations/${org.id}/projects`,
+                            `https://api.supabase.com/platform/organizations/${org.id}/projects`,
+                            `https://api.supabase.com/v1/projects?organization_id=${org.id}`
+                          ];
                           
                           for (const endpoint of projectEndpoints) {
                             try {
-                              console.log(`Trying projects endpoint: ${endpoint}`);
-                              orgProjectsResponse = await fetch(endpoint, {
+                              const orgProjectsResponse = await fetch(endpoint, {
                                 headers: {
                                   'Authorization': `Bearer ${tokenResult.tokens.accessToken}`,
                                   'Content-Type': 'application/json',
@@ -993,15 +1114,11 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
                                 }
                               });
                               
-                              console.log(`Projects API response status for ${endpoint}: ${orgProjectsResponse.status}`);
-                              
                               if (orgProjectsResponse.ok) {
                                 const orgProjectsData = await orgProjectsResponse.json();
                                 const orgProjects = orgProjectsData.projects || orgProjectsData || [];
-                                console.log(`Projects for org ${org.id} from ${endpoint}:`, orgProjects);
                                 
                                 if (orgProjects.length > 0) {
-                                  // Organizasyon bilgisini projelere ekle
                                   const projectsWithOrg = orgProjects.map((project: any) => ({
                                     ...project,
                                     organization_name: org.name,
@@ -1009,66 +1126,86 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
                                   }));
                                   
                                   projects = [...projects, ...projectsWithOrg];
-                                  projectsFound = true;
-                                  console.log(`Successfully fetched ${orgProjects.length} projects from ${endpoint}`);
+                                  console.log(`✅ Added ${orgProjects.length} projects from ${endpoint}`);
                                   break;
                                 }
-                              } else {
-                                const errorText = await orgProjectsResponse.text();
-                                console.warn(`Projects API failed for ${endpoint}, status: ${orgProjectsResponse.status}, error: ${errorText}`);
                               }
                             } catch (error) {
                               console.warn(`Error fetching projects from ${endpoint}:`, error);
                             }
                           }
-                          
-                          if (!projectsFound) {
-                            console.warn(`No projects found for organization ${org.id} (${org.name})`);
-                          }
                         } catch (error) {
                           console.warn(`Error fetching projects for org ${org.id}:`, error);
                         }
                       }
-                    } else {
-                      if (orgsResponse) {
-                        const errorText = await orgsResponse.text();
-                        console.warn('All organizations API endpoints failed in JWT flow');
-                        console.warn('Last response status:', orgsResponse.status);
-                        console.warn('Last error response:', errorText);
-                      } else {
-                        console.warn('All organizations API endpoints failed in JWT flow - no successful response');
-                      }
                     }
+                    
+                    // Format kullanıcı verilerini tutarlı hale getir
+                    const formattedUserData = {
+                      id: realUserData.id || realUserData.user_id || payload.sub || 'user_' + Date.now(),
+                      email: realUserData.email || userEmail,
+                      user_metadata: realUserData.user_metadata || {
+                        full_name: realUserData.name || realUserData.full_name || payload.name || userEmail?.split('@')[0] || 'Supabase User'
+                      },
+                      app_metadata: realUserData.app_metadata || payload.app_metadata || {}
+                    };
+                    
+                    console.log('🎯 Final formatted user data:', JSON.stringify(formattedUserData, null, 2));
+                    
+                    const oauthResult = {
+                      ok: true,
+                      message: 'OAuth completed successfully',
+                      user: formattedUserData,
+                      access_token: tokenResult.tokens.accessToken,
+                      refresh_token: tokenResult.tokens.refreshToken,
+                      orgs: organizations.length > 0 ? organizations : [
+                        { id: 'default', name: 'Default Organization', slug: 'default-org' }
+                      ],
+                      projects: projects
+                    };
+                    
+                    console.log('🔍 OAuth Result Debug:', {
+                      hasAccessToken: !!oauthResult.access_token,
+                      hasRefreshToken: !!oauthResult.refresh_token,
+                      accessTokenPreview: oauthResult.access_token ? oauthResult.access_token.substring(0, 20) + '...' : 'null',
+                      userEmail: oauthResult.user?.email,
+                      userId: oauthResult.user?.id
+                    });
+                    
+                    return oauthResult;
+                    
                   } catch (error) {
-                    console.warn('Error fetching organizations and projects from JWT flow:', error);
+                    console.warn('Error in JWT flow user data fetch:', error);
+                    // Fallback to JWT data only
+                    const jwtUserData = {
+                      id: payload.sub || payload.user_id || 'user_' + Date.now(),
+                      email: userEmail,
+                      user_metadata: payload.user_metadata || {
+                        full_name: payload.name || userEmail?.split('@')[0] || 'Supabase User'
+                      },
+                      app_metadata: payload.app_metadata || {}
+                    };
+                    
+                    const jwtResult = {
+                      ok: true,
+                      message: 'OAuth completed successfully (JWT fallback)',
+                      user: jwtUserData,
+                      access_token: tokenResult.tokens.accessToken,
+                      refresh_token: tokenResult.tokens.refreshToken,
+                      orgs: [{ id: 'default', name: 'Default Organization', slug: 'default-org' }],
+                      projects: []
+                    };
+                    
+                    console.log('🔍 JWT Fallback Result Debug:', {
+                      hasAccessToken: !!jwtResult.access_token,
+                      hasRefreshToken: !!jwtResult.refresh_token,
+                      accessTokenPreview: jwtResult.access_token ? jwtResult.access_token.substring(0, 20) + '...' : 'null',
+                      userEmail: jwtResult.user?.email,
+                      userId: jwtResult.user?.id
+                    });
+                    
+                    return jwtResult;
                   }
-                  
-                  // Eğer hiçbir proje bulunamazsa, kullanıcıya bilgi ver
-                  if (projects.length === 0) {
-                    console.log('No projects found for user - this is normal for new accounts');
-                    console.log('User should create a project in Supabase dashboard first');
-                  }
-                  
-                  const jwtUserData = {
-                    id: payload.sub || payload.user_id || 'user_' + Date.now(),
-                    email: payload.email,
-                    user_metadata: payload.user_metadata || {
-                      full_name: payload.name || payload.email.split('@')[0] || 'Supabase User'
-                    },
-                    app_metadata: payload.app_metadata || {}
-                  };
-                  
-                  console.log('🎯 JWT user data being returned:', JSON.stringify(jwtUserData, null, 2));
-                  
-                  return {
-                    ok: true,
-                    message: 'OAuth completed successfully',
-                    user: jwtUserData,
-                    orgs: organizations.length > 0 ? organizations : [
-                      { id: 'default', name: 'Default Organization', slug: 'default-org' }
-                    ],
-                    projects: projects
-                  };
                 }
               
             } catch (jwtError) {
@@ -1081,22 +1218,55 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
             console.log('JWT decode failed, trying Management API');
             console.log('Using access token for API calls:', tokenResult.tokens.accessToken.substring(0, 20) + '...');
 
-            const userResponse = await fetch('https://api.supabase.com/platform/profile', {
-              headers: {
-                'Authorization': `Bearer ${tokenResult.tokens.accessToken}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
+            // Gerçek kullanıcı bilgilerini al - farklı endpoint'ler dene
+            console.log('Fetching real user data from Management API...');
+            console.log('Token preview:', tokenResult.tokens.accessToken.substring(0, 50) + '...');
+            
+            const userEndpoints = [
+              'https://api.supabase.com/v1/user',
+              'https://api.supabase.com/v1/me',
+              'https://api.supabase.com/platform/profile',
+              'https://api.supabase.com/platform/user',
+              'https://api.supabase.com/v1/profile',
+              'https://api.supabase.com/v1/account',
+              'https://api.supabase.com/platform/account'
+            ];
+            
+            let userResponse: Response | null = null;
+            let workingUserEndpoint: string | null = null;
+            let userData: any = null;
+            
+            for (const endpoint of userEndpoints) {
+              try {
+                console.log(`Trying user endpoint: ${endpoint}`);
+                userResponse = await fetch(endpoint, {
+                  headers: {
+                    'Authorization': `Bearer ${tokenResult.tokens.accessToken}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                  }
+                });
+                
+                console.log(`User API response status for ${endpoint}: ${userResponse.status}`);
+                
+                if (userResponse.ok) {
+                  userData = await userResponse.json();
+                  workingUserEndpoint = endpoint;
+                  console.log(`✅ Real user data retrieved from ${endpoint}:`, JSON.stringify(userData, null, 2));
+                  break;
+                } else {
+                  const errorText = await userResponse.text();
+                  console.warn(`User endpoint ${endpoint} failed: ${userResponse.status} - ${errorText}`);
+                }
+              } catch (error) {
+                console.warn(`Error fetching from ${endpoint}:`, error);
               }
-            });
+            }
 
-            console.log(`User API response status: ${userResponse.status}`);
-            console.log(`User API response headers:`, Object.fromEntries(userResponse.headers.entries()));
-
-            if (userResponse.ok) {
-              const userData = await userResponse.json();
-              console.log('✅ Management API - User data retrieved:', JSON.stringify(userData, null, 2));
+            if (userData) {
+              console.log('✅ Management API - User data retrieved successfully');
               console.log('✅ Management API - User email:', userData.email);
-              console.log('✅ Management API - User name:', userData.name);
+              console.log('✅ Management API - User name:', userData.name || userData.full_name);
               console.log('✅ Management API - User metadata:', userData.user_metadata);
             
             // Gerçek projeleri al - doğru Supabase Management API endpoint'lerini kullan
@@ -1228,16 +1398,9 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
                     console.warn(`Error fetching projects for org ${org.id}:`, error);
                   }
                 }
-              } else {
-                if (orgsResponse) {
-                  const errorText = await orgsResponse.text();
-                  console.warn('All organizations API endpoints failed');
-                  console.warn('Last response status:', orgsResponse.status);
-                  console.warn('Last error response:', errorText);
-                } else {
-                  console.warn('All organizations API endpoints failed - no successful response');
-                }
-              }
+            } else {
+              console.warn('All user API endpoints failed - no successful response');
+            }
             } catch (error) {
               console.warn('Error fetching organizations and projects:', error);
             }
@@ -1251,30 +1414,42 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
               console.log(`Successfully fetched ${projects.length} real projects from Supabase API`);
             }
             
+            // Format kullanıcı verilerini tutarlı hale getir
             const finalUserData = {
-              id: userData.id || 'user_' + Date.now(),
+              id: userData.id || userData.user_id || 'user_' + Date.now(),
               email: userData.email || 'user@supabase.com',
               user_metadata: userData.user_metadata || {
-                full_name: userData.email || 'Supabase User'
+                full_name: userData.name || userData.full_name || userData.email?.split('@')[0] || 'Supabase User'
               },
               app_metadata: userData.app_metadata || {}
             };
             
             console.log('🎯 Final user data being returned:', JSON.stringify(finalUserData, null, 2));
             
-            return {
+            const managementApiResult = {
               ok: true,
               message: 'OAuth completed successfully',
               user: finalUserData,
+              access_token: tokenResult.tokens.accessToken,
+              refresh_token: tokenResult.tokens.refreshToken,
               orgs: organizations.length > 0 ? organizations : [
                 { id: 'default', name: 'Default Organization', slug: 'default-org' }
               ],
               projects: projects
             };
+            
+            console.log('🔍 Management API Result Debug:', {
+              hasAccessToken: !!managementApiResult.access_token,
+              hasRefreshToken: !!managementApiResult.refresh_token,
+              accessTokenPreview: managementApiResult.access_token ? managementApiResult.access_token.substring(0, 20) + '...' : 'null',
+              userEmail: managementApiResult.user?.email,
+              userId: managementApiResult.user?.id,
+              projectsCount: managementApiResult.projects.length
+            });
+            
+            return managementApiResult;
             } else {
-              const errorText = await userResponse.text();
-              console.warn('Management API failed, status:', userResponse.status);
-              console.warn('Management API error response:', errorText);
+              console.warn('Management API failed - no successful user endpoint response');
             }
         } catch (error) {
           console.warn('Error fetching user data:', error);
@@ -1456,16 +1631,22 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
           console.log('User should create a project in Supabase dashboard first');
         }
         
+        // Format fallback kullanıcı verilerini tutarlı hale getir
+        const fallbackUserData = fallbackUserInfo || {
+          id: 'user_' + Date.now(),
+          email: 'user@supabase.com',
+          user_metadata: {
+            full_name: 'Supabase User'
+          },
+          app_metadata: {}
+        };
+        
+        console.log('🎯 Fallback user data being returned:', JSON.stringify(fallbackUserData, null, 2));
+        
         return {
           ok: true,
-          message: 'OAuth completed successfully',
-          user: fallbackUserInfo || {
-            id: 'user_' + Date.now(),
-            email: 'user@supabase.com',
-            user_metadata: {
-              full_name: 'Supabase User'
-            }
-          },
+          message: 'OAuth completed successfully (fallback)',
+          user: fallbackUserData,
           orgs: organizations.length > 0 ? organizations : [
             { id: 'default', name: 'Default Organization', slug: 'default-org' }
           ],
@@ -1601,6 +1782,8 @@ ipcMain.handle('supabase:logout', async () => {
     };
   }
 });
+
+// Auth handlers moved to ipc-handlers.ts
 
 // File processing handlers
 ipcMain.handle('file:process', async (event, filePath, options) => {
