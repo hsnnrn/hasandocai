@@ -7,21 +7,16 @@
  * 3. Critic verification (mismatch detection)
  */
 
-import { describe, it, expect } from '@jest/globals';
 import { 
   aggregateAll, 
   aggregateInvoiceIDs,
   aggregateAmounts,
 } from '../src/main/ai/aggregator';
-import type { 
-  ExtractedAmount, 
-  ExtractedDate, 
-  ExtractedInvoiceID 
-} from '../src/main/ai/numericExtractor';
+import { ExtractedAmount, ExtractedDate, ExtractedInvoiceID } from '../src/main/ai/numericExtractor';
 
 describe('Deep Analysis Pipeline - Duplicate Detection', () => {
   it('should detect duplicate invoice IDs', () => {
-    const invoices: ExtractedInvoiceID[] = [
+    const invoices = [
       { id: 'INV-001', raw: 'INV-001', confidence: 0.9, pattern: 'structured' },
       { id: 'INV-002', raw: 'INV-002', confidence: 0.9, pattern: 'structured' },
       { id: 'INV-001', raw: 'INV-001', confidence: 0.9, pattern: 'structured' }, // Duplicate
@@ -32,21 +27,22 @@ describe('Deep Analysis Pipeline - Duplicate Detection', () => {
     const result = aggregateInvoiceIDs(invoices);
 
     expect(result).not.toBeNull();
-    expect(result!.count).toBe(5);
-    expect(result!.uniqueCount).toBe(3);
-    expect(result!.duplicates).toContain('INV-001');
-    expect(result!.duplicates).toContain('INV-002');
-    expect(result!.duplicates.length).toBe(2);
+    if (!result) return; // Type guard
+    expect(result.count).toBe(5);
+    expect(result.uniqueCount).toBe(3);
+    expect(result.duplicates).toContain('INV-001');
+    expect(result.duplicates).toContain('INV-002');
+    expect(result.duplicates.length).toBe(2);
   });
 
   it('should flag duplicatesFound when duplicates exist', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
     ];
 
     const dates: ExtractedDate[] = [];
 
-    const invoices: ExtractedInvoiceID[] = [
+    const invoices = [
       { id: 'INV-001', raw: 'INV-001', confidence: 0.9, pattern: 'structured' },
       { id: 'INV-001', raw: 'INV-001', confidence: 0.9, pattern: 'structured' }, // Duplicate
     ];
@@ -57,13 +53,13 @@ describe('Deep Analysis Pipeline - Duplicate Detection', () => {
   });
 
   it('should not flag duplicatesFound when no duplicates', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
     ];
 
     const dates: ExtractedDate[] = [];
 
-    const invoices: ExtractedInvoiceID[] = [
+    const invoices = [
       { id: 'INV-001', raw: 'INV-001', confidence: 0.9, pattern: 'structured' },
       { id: 'INV-002', raw: 'INV-002', confidence: 0.9, pattern: 'structured' },
     ];
@@ -77,7 +73,7 @@ describe('Deep Analysis Pipeline - Duplicate Detection', () => {
 describe('Deep Analysis Pipeline - Outlier Detection', () => {
   it('should detect outliers using IQR method', () => {
     // Normal distribution with one outlier
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
       { amount: 110, currency: 'TRY', raw: '110 TL', confidence: 0.9 },
       { amount: 105, currency: 'TRY', raw: '105 TL', confidence: 0.9 },
@@ -89,13 +85,15 @@ describe('Deep Analysis Pipeline - Outlier Detection', () => {
     const result = aggregateAmounts(amounts, { includeStats: true });
 
     expect(result.outliers).toBeDefined();
-    expect(result.outliers!.length).toBeGreaterThan(0);
+    expect(result.outliers).not.toBeUndefined();
+    if (!result.outliers) return; // Type guard
+    expect(result.outliers.length).toBeGreaterThan(0);
     expect(result.outliers).toContain(500);
     expect(result.outliersFound).toBe(true);
   });
 
   it('should not detect outliers in uniform distribution', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
       { amount: 110, currency: 'TRY', raw: '110 TL', confidence: 0.9 },
       { amount: 105, currency: 'TRY', raw: '105 TL', confidence: 0.9 },
@@ -109,7 +107,7 @@ describe('Deep Analysis Pipeline - Outlier Detection', () => {
   });
 
   it('should flag outliersFound in full aggregation', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
       { amount: 110, currency: 'TRY', raw: '110 TL', confidence: 0.9 },
       { amount: 105, currency: 'TRY', raw: '105 TL', confidence: 0.9 },
@@ -124,7 +122,7 @@ describe('Deep Analysis Pipeline - Outlier Detection', () => {
   });
 
   it('should handle multiple outliers correctly', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
       { amount: 110, currency: 'TRY', raw: '110 TL', confidence: 0.9 },
       { amount: 105, currency: 'TRY', raw: '105 TL', confidence: 0.9 },
@@ -135,7 +133,9 @@ describe('Deep Analysis Pipeline - Outlier Detection', () => {
 
     const result = aggregateAmounts(amounts, { includeStats: true });
 
-    expect(result.outliers!.length).toBe(2);
+    expect(result.outliers).toBeDefined();
+    if (!result.outliers) return; // Type guard
+    expect(result.outliers.length).toBe(2);
     expect(result.outliers).toContain(10);
     expect(result.outliers).toContain(500);
   });
@@ -146,7 +146,7 @@ describe('Deep Analysis Pipeline - Critic Verification Simulation', () => {
   // Actual critic testing would require mocking Mistral API
   
   it('should detect when sum is incorrect', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
       { amount: 200, currency: 'TRY', raw: '200 TL', confidence: 0.9 },
     ];
@@ -164,7 +164,7 @@ describe('Deep Analysis Pipeline - Critic Verification Simulation', () => {
   });
 
   it('should verify when average is correct', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
       { amount: 200, currency: 'TRY', raw: '200 TL', confidence: 0.9 },
       { amount: 150, currency: 'TRY', raw: '150 TL', confidence: 0.9 },
@@ -182,7 +182,7 @@ describe('Deep Analysis Pipeline - Critic Verification Simulation', () => {
   });
 
   it('should detect when count is incorrect', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
       { amount: 200, currency: 'TRY', raw: '200 TL', confidence: 0.9 },
       { amount: 150, currency: 'TRY', raw: '150 TL', confidence: 0.9 },
@@ -200,7 +200,7 @@ describe('Deep Analysis Pipeline - Critic Verification Simulation', () => {
   });
 
   it('should verify median calculation', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
       { amount: 200, currency: 'TRY', raw: '200 TL', confidence: 0.9 },
       { amount: 300, currency: 'TRY', raw: '300 TL', confidence: 0.9 },
@@ -217,16 +217,18 @@ describe('Deep Analysis Pipeline - Critic Verification Simulation', () => {
 
 describe('Deep Analysis Pipeline - Integration Tests', () => {
   it('should handle complete pipeline with all flags', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
       { amount: 110, currency: 'TRY', raw: '110 TL', confidence: 0.9 },
       { amount: 105, currency: 'TRY', raw: '105 TL', confidence: 0.9 },
+      { amount: 95, currency: 'TRY', raw: '95 TL', confidence: 0.9 },
+      { amount: 102, currency: 'TRY', raw: '102 TL', confidence: 0.9 },
       { amount: 1000, currency: 'TRY', raw: '1000 TL', confidence: 0.9 }, // Outlier
     ];
 
     const dates: ExtractedDate[] = [];
 
-    const invoices: ExtractedInvoiceID[] = [
+    const invoices = [
       { id: 'INV-001', raw: 'INV-001', confidence: 0.9, pattern: 'structured' },
       { id: 'INV-001', raw: 'INV-001', confidence: 0.9, pattern: 'structured' }, // Duplicate
     ];
@@ -238,13 +240,15 @@ describe('Deep Analysis Pipeline - Integration Tests', () => {
     expect(aggregation.metadata.duplicatesFound).toBe(true);
     
     // Verify statistics
-    expect(aggregation.amounts.count).toBe(4);
+    expect(aggregation.amounts.count).toBe(6);
     expect(aggregation.amounts.outliers).toBeDefined();
-    expect(aggregation.invoices?.duplicates.length).toBeGreaterThan(0);
+    expect(aggregation.invoices).not.toBeNull();
+    if (!aggregation.invoices) return; // Type guard
+    expect(aggregation.invoices.duplicates.length).toBeGreaterThan(0);
   });
 
   it('should provide complete stats including min and max', () => {
-    const amounts: ExtractedAmount[] = [
+    const amounts = [
       { amount: 50, currency: 'TRY', raw: '50 TL', confidence: 0.9 },
       { amount: 100, currency: 'TRY', raw: '100 TL', confidence: 0.9 },
       { amount: 200, currency: 'TRY', raw: '200 TL', confidence: 0.9 },
