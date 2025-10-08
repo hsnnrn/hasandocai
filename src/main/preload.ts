@@ -108,6 +108,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getGroupAnalysisResults: (groupId: string) => ipcRenderer.invoke('group:getGroupAnalysisResults', groupId),
 });
 
+// AI Chat API
+contextBridge.exposeInMainWorld('aiAPI', {
+  // AI Chat Query Methods
+  initializeChatController: () => ipcRenderer.invoke('ai:initializeChatController'),
+  chatQuery: (request: any) => ipcRenderer.invoke('ai:chatQuery', request),
+  healthCheck: () => ipcRenderer.invoke('ai:healthCheck'),
+  debugRetrieval: () => ipcRenderer.invoke('ai:debugRetrieval'),
+  
+  // Local Storage Document Methods
+  addDocumentToLocalStorage: (request: any) => ipcRenderer.invoke('ai:addDocumentToLocalStorage', request),
+  getStoredDocuments: () => ipcRenderer.invoke('ai:getStoredDocuments'),
+  clearStoredDocuments: () => ipcRenderer.invoke('ai:clearStoredDocuments'),
+  
+  // Migration Methods
+  migrateExistingData: () => ipcRenderer.invoke('ai:migrateExistingData'),
+  getMigrationStatus: () => ipcRenderer.invoke('ai:getMigrationStatus'),
+  clearMigratedData: () => ipcRenderer.invoke('ai:clearMigratedData'),
+});
+
 // Types for TypeScript
 declare global {
   interface Window {
@@ -353,6 +372,108 @@ declare global {
       getGroupAnalysisResults: (groupId: string) => Promise<{
         success: boolean;
         results?: any[];
+        message?: string;
+        error?: string;
+      }>;
+    };
+
+    aiAPI: {
+      // AI Chat Query Methods
+      initializeChatController: () => Promise<{
+        success: boolean;
+        message?: string;
+        health?: {
+          embed: boolean;
+          retrieval: boolean;
+          mistral: boolean;
+        };
+        error?: string;
+      }>;
+      
+      chatQuery: (request: {
+        userId: string;
+        query: string;
+        options?: {
+          currency?: string;
+          dateRange?: { from: string; to: string };
+          topK?: number;
+          locale?: 'tr' | 'us' | 'auto';
+        };
+      }) => Promise<{
+        success: boolean;
+        payload?: {
+          answer: string;
+          stats: {
+            count: number;
+            sum: number;
+            average: number;
+            median: number;
+            currency: string | null;
+          };
+          provenance: Array<{
+            sectionId: string;
+            documentId: string;
+            filename: string;
+            snippet: string;
+            similarity: number;
+            metadata?: any;
+          }>;
+          usedChunkIds: string[];
+          modelMeta: {
+            model: string;
+            latencyMs: number;
+            fallback?: string;
+          };
+          lowConfidence?: boolean;
+          suggestedFollowUp?: string;
+        };
+        error?: string;
+      }>;
+
+      healthCheck: () => Promise<{
+        success: boolean;
+        health?: {
+          embed: boolean;
+          retrieval: boolean;
+          mistral: boolean;
+        };
+        allHealthy?: boolean;
+        error?: string;
+      }>;
+
+      addDocumentToLocalStorage: (request: any) => Promise<{
+        success: boolean;
+        message?: string;
+        error?: string;
+      }>;
+      getStoredDocuments: () => Promise<{
+        success: boolean;
+        documents?: any[];
+        error?: string;
+      }>;
+      clearStoredDocuments: () => Promise<{
+        success: boolean;
+        message?: string;
+        error?: string;
+      }>;
+
+      migrateExistingData: () => Promise<{
+        success: boolean;
+        migratedCount: number;
+        errors: string[];
+        message?: string;
+      }>;
+      getMigrationStatus: () => Promise<{
+        success: boolean;
+        status?: {
+          totalConversions: number;
+          migratedDocuments: number;
+          needsMigration: boolean;
+        };
+        error?: string;
+      }>;
+      clearMigratedData: () => Promise<{
+        success: boolean;
         message?: string;
         error?: string;
       }>;

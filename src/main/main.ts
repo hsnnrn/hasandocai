@@ -513,143 +513,11 @@ try {
 }
 
 // IPC Handlers
+// Note: Most IPC handlers are now in ipc-handlers.ts (including supabase:fetchProjects)
 
-// Supabase Management API - User Info fetching
-ipcMain.handle('supabase:fetchUserInfo', async () => {
-  try {
-    if (!tokenStorage) {
-      return {
-        ok: false,
-        error: 'Token storage not initialized'
-      };
-    }
-
-    const tokens = await tokenStorage.getTokens();
-    if (!tokens || tokens.expiresAt <= Date.now()) {
-      return {
-        ok: false,
-        error: 'No valid access token available'
-      };
-    }
-
-    // Token formatını kontrol et
-    console.log('🔍 Token validation - Length:', tokens.accessToken.length);
-    console.log('🔍 Token validation - Preview:', tokens.accessToken.substring(0, 50) + '...');
-    
-    // JWT formatını kontrol et (3 parça olmalı)
-    const tokenParts = tokens.accessToken.split('.');
-    if (tokenParts.length !== 3) {
-      console.error('❌ Invalid JWT format - expected 3 parts, got:', tokenParts.length);
-      return {
-        ok: false,
-        error: 'Invalid access token format'
-      };
-    }
-    
-    console.log('✅ Token format is valid JWT');
-
-    console.log('🔍 Fetching user info from Supabase Management API...');
-    
-    // Try multiple endpoints for user info
-    const userEndpoints = [
-      'https://api.supabase.com/platform/profile',
-      'https://api.supabase.com/v1/user',
-      'https://api.supabase.com/v1/me',
-      'https://api.supabase.com/platform/user',
-      'https://api.supabase.com/v1/profile'
-    ];
-    
-    for (const endpoint of userEndpoints) {
-      try {
-        console.log(`🔍 Trying user endpoint: ${endpoint}`);
-        const response = await fetch(endpoint, {
-          headers: {
-            'Authorization': `Bearer ${tokens.accessToken}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
-        });
-        
-        console.log(`🔍 User API response status for ${endpoint}: ${response.status}`);
-        
-        if (response.ok) {
-          const userData = await response.json();
-          console.log(`✅ User data retrieved from ${endpoint}:`, JSON.stringify(userData, null, 2));
-          
-          // Format user data consistently
-          const formattedUserData = {
-            id: userData.id || userData.user_id || 'user_' + Date.now(),
-            email: userData.email || userData.email_address,
-            user_metadata: userData.user_metadata || userData.metadata || {
-              full_name: userData.name || userData.full_name || userData.display_name || userData.email?.split('@')[0] || 'Supabase User'
-            },
-            app_metadata: userData.app_metadata || userData.app_metadata || {}
-          };
-          
-          console.log('🎯 Formatted user data:', JSON.stringify(formattedUserData, null, 2));
-          
-          return {
-            ok: true,
-            user: formattedUserData,
-            message: `User info retrieved from ${endpoint}`
-          };
-        } else {
-          const errorText = await response.text();
-          console.warn(`❌ User endpoint ${endpoint} failed: ${response.status} - ${errorText}`);
-        }
-      } catch (error) {
-        console.warn(`❌ Error fetching from ${endpoint}:`, error);
-      }
-    }
-    
-    // If all endpoints fail, try JWT decode as fallback
-    console.log('🔍 All user endpoints failed, trying JWT decode...');
-    try {
-      const tokenParts = tokens.accessToken.split('.');
-      if (tokenParts.length === 3) {
-        let payloadBase64 = tokenParts[1];
-        while (payloadBase64.length % 4) {
-          payloadBase64 += '=';
-        }
-        const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
-        console.log('🔍 JWT payload:', JSON.stringify(payload, null, 2));
-        
-        const jwtUserData = {
-          id: payload.sub || payload.user_id || 'user_' + Date.now(),
-          email: payload.email,
-          user_metadata: payload.user_metadata || {
-            full_name: payload.name || payload.email?.split('@')[0] || 'Supabase User'
-          },
-          app_metadata: payload.app_metadata || {}
-        };
-        
-        console.log('🎯 JWT user data:', JSON.stringify(jwtUserData, null, 2));
-        
-        return {
-          ok: true,
-          user: jwtUserData,
-          message: 'User info retrieved from JWT token'
-        };
-      }
-    } catch (jwtError) {
-      console.warn('❌ JWT decode also failed:', jwtError);
-    }
-    
-    return {
-      ok: false,
-      error: 'All user info endpoints failed'
-    };
-    
-  } catch (error) {
-    console.error('❌ Error fetching user info:', error);
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch user info'
-    };
-  }
-});
-
-// Supabase Management API - Projects fetching
+// Legacy handlers below (will be moved to ipc-handlers.ts eventually)
+const skipProjectsFetching = true; // Already in ipc-handlers.ts
+if (!skipProjectsFetching) {
 ipcMain.handle('supabase:fetchProjects', async () => {
   try {
     if (!tokenStorage) {
@@ -848,6 +716,7 @@ ipcMain.handle('supabase:fetchProjects', async () => {
     };
   }
 });
+} // End of skip block
 
 // OAuth başlatma handler'ı
 ipcMain.handle('start-oauth', async (event, { authUrl, redirectUri }) => {
@@ -1785,98 +1654,36 @@ ipcMain.handle('supabase:logout', async () => {
 
 // Auth handlers moved to ipc-handlers.ts
 
-// File processing handlers
+// NOTE: File processing handlers (file:process, file:open, file:save, etc.)
+// are now implemented in ipc-handlers.ts to avoid duplicate handler errors.
+// The legacy implementations below have been commented out.
+
+/*
+// LEGACY - File processing handlers (MOVED TO ipc-handlers.ts)
 ipcMain.handle('file:process', async (event, filePath, options) => {
-  try {
-    console.log('File processing started for:', filePath);
-    
-    const fs = await import('fs/promises');
-    const fileBuffer = await fs.readFile(filePath);
-    
-    // Using ConvertAPI for processing
-    const { ConvertAPIService } = await import('./services/ConvertAPIService');
-    const convertAPI = new ConvertAPIService('<YOUR_CONVERTAPI_KEY>');
-    
-    let result;
-    const fileExtension = filePath.toLowerCase().split('.').pop();
-    const isPdfFile = fileExtension === 'pdf';
-    
-    if (isPdfFile && options.outputFormat === 'docx') {
-        result = await convertAPI.convertPDFToDOCX(fileBuffer, path.basename(filePath), options.outputDirectory);
-      } else {
-        // Fallback to PDF to DOCX
-        result = await convertAPI.convertPDFToDOCX(fileBuffer, path.basename(filePath), options.outputDirectory);
-    }
-    
-    return result;
-  } catch (error) {
-    console.error('File processing error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
-  }
+  // ... implementation moved to ipc-handlers.ts
 });
 
-// File operations
+// LEGACY - File operations (MOVED TO ipc-handlers.ts)
 ipcMain.handle('file:open', async () => {
-  const { dialog } = await import('electron');
-  const result = await dialog.showOpenDialog(mainWindow!, {
-    properties: ['openFile'],
-    filters: [
-      { name: 'PDF Files', extensions: ['pdf'] },
-      { name: 'Image Files', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'tiff'] },
-      { name: 'Word Documents', extensions: ['doc', 'docx'] },
-      { name: 'All Files', extensions: ['*'] }
-    ]
-  });
-  
-  if (!result.canceled && result.filePaths.length > 0) {
-    return result.filePaths[0];
-  }
-  return null;
+  // ... implementation moved to ipc-handlers.ts
 });
 
 ipcMain.handle('file:save', async (event, data, defaultName) => {
-  const { dialog } = await import('electron');
-  const result = await dialog.showSaveDialog(mainWindow!, {
-    defaultPath: defaultName,
-    filters: [
-      { name: 'PDF Files', extensions: ['pdf'] },
-      { name: 'Word Documents', extensions: ['docx'] },
-      { name: 'Image Files', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'tiff'] },
-      { name: 'All Files', extensions: ['*'] }
-    ]
-  });
-  
-  if (!result.canceled && result.filePath) {
-    const fs = await import('fs/promises');
-    await fs.writeFile(result.filePath, data);
-    return result.filePath;
-  }
-  return null;
+  // ... implementation moved to ipc-handlers.ts
 });
 
-// Directory selection
+// LEGACY - Directory selection (MOVED TO ipc-handlers.ts)
 ipcMain.handle('selectDirectory', async () => {
-  const { dialog } = await import('electron');
-  const result = await dialog.showOpenDialog(mainWindow!, {
-    properties: ['openDirectory'],
-    title: 'Select Output Directory'
-  });
-  
-  if (!result.canceled && result.filePaths.length > 0) {
-    return result.filePaths[0];
-  }
-  return null;
+  // ... implementation moved to ipc-handlers.ts
 });
 
-// Default directory
+// LEGACY - Default directory (MOVED TO ipc-handlers.ts)
 ipcMain.handle('getDefaultDirectory', async () => {
   return getAutoSavePath();
 });
 
-// Data handlers
+// LEGACY - Data handlers (MOVED TO ipc-handlers.ts)
 ipcMain.handle('data:getHistory', async () => {
   return [];
 });
@@ -1895,7 +1702,7 @@ ipcMain.handle('data:saveTemplate', async (event, template) => {
   return true;
 });
 
-// Settings handlers
+// LEGACY - Settings handlers (MOVED TO ipc-handlers.ts)
 ipcMain.handle('settings:get', async (event, key) => {
   return null;
 });
@@ -1909,7 +1716,7 @@ ipcMain.handle('settings:getAll', async () => {
   return {};
 });
 
-// App info handlers
+// LEGACY - App info handlers (MOVED TO ipc-handlers.ts)
 ipcMain.handle('app:getVersion', () => {
   return app.getVersion();
 });
@@ -1917,6 +1724,7 @@ ipcMain.handle('app:getVersion', () => {
 ipcMain.handle('app:getPlatform', () => {
   return process.platform;
 });
+*/
 
 // NOTE: Safety & Packaging Notları
 // 1. Keytar kullanılıyorsa: npm run electron-rebuild:keytar

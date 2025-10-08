@@ -1465,52 +1465,8 @@ ipcMain.handle('pdf:convertToDOCXEnhanced', async (event, filePath: string, opti
   }
 });
 
-// Supabase OAuth handlers
-ipcMain.handle('supabase:startAuth', async (event, options: any) => {
-  try {
-    console.log('Starting Supabase OAuth flow with options:', options);
-    // This would be implemented based on your OAuth flow
-    return { success: true, message: 'OAuth flow started' };
-  } catch (error) {
-    console.error('Error starting Supabase OAuth:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to start OAuth flow' };
-  }
-});
-
-ipcMain.handle('supabase:getAuthStatus', async () => {
-  try {
-    console.log('Getting Supabase auth status');
-    // This would be implemented based on your auth status logic
-    return { success: true, authenticated: false, user: null };
-  } catch (error) {
-    console.error('Error getting auth status:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to get auth status' };
-  }
-});
-
-ipcMain.handle('supabase:logout', async () => {
-  try {
-    console.log('Logging out from Supabase');
-    // This would be implemented based on your logout logic
-    return { success: true, message: 'Logged out successfully' };
-  } catch (error) {
-    console.error('Error logging out:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to logout' };
-  }
-});
-
-ipcMain.handle('supabase:fetchUserInfo', async () => {
-  try {
-    console.log('Fetching Supabase user info');
-    // This would be implemented based on your user info fetching logic
-    return { success: true, user: null };
-  } catch (error) {
-    console.error('Error fetching user info:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch user info' };
-  }
-});
-
-console.log('Auth IPC handlers registered');
+// Note: Supabase OAuth handlers (startAuth, getAuthStatus, logout, fetchUserInfo) 
+// are implemented in main.ts to avoid duplicate handler registration errors
 
 // Supabase Management API - Fetch Projects
 ipcMain.handle('supabase:fetchProjects', async () => {
@@ -1709,22 +1665,6 @@ ipcMain.handle('auth:clearSupabaseCredentials', async () => {
   }
 });
 
-ipcMain.handle('auth:saveAuthInfo', async (event, authInfo) => {
-  try {
-    const storage = await initializeTokenStorage();
-    
-    await storage.saveAuthInfo(authInfo);
-    console.log('✅ Auth info saved successfully');
-    return { success: true };
-  } catch (error) {
-    console.error('Error saving auth info:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to save auth info' 
-    };
-  }
-});
-
 console.log('Auth IPC handlers registered:');
 console.log('- auth:getSupabaseCredentials');
 console.log('- auth:saveSupabaseCredentials');
@@ -1732,9 +1672,410 @@ console.log('- auth:clearSupabaseCredentials');
 console.log('- auth:saveAuthInfo');
 console.log('- supabase:uploadAnalysis');
 console.log('- supabase:fetchProjects');
-console.log('- auth:saveAuthInfo');
 
 // Debug: Verify handler registration
 console.log('🔍 Verifying group:initializeGroupAnalysisService handler registration...');
 const handlers = ipcMain.listenerCount('group:initializeGroupAnalysisService');
 console.log(`📊 Handler count for group:initializeGroupAnalysisService: ${handlers}`);
+
+// ============================================================================
+// AI Chat Query Handlers (Mistral RAG Pipeline)
+// ============================================================================
+
+import { ChatController } from './ai/chatController';
+import { LocalStorageMigrator } from './ai/localStorageMigrator';
+
+let chatController: ChatController | null = null;
+let localStorageMigrator: LocalStorageMigrator | null = null;
+
+/**
+ * Initialize chat controller
+ */
+ipcMain.handle('ai:initializeChatController', async () => {
+  try {
+    if (!chatController) {
+      chatController = new ChatController(true); // Enable local storage
+      console.log('ChatController initialized successfully with local storage');
+    }
+    
+    // Perform health check
+    const health = await chatController.healthCheck();
+    
+    return {
+      success: true,
+      message: 'Chat controller initialized',
+      health,
+    };
+  } catch (error) {
+    console.error('Failed to initialize chat controller:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+/**
+ * Add document to local storage for retrieval
+ */
+ipcMain.handle('ai:addDocumentToLocalStorage', async (event, request: {
+  documentId: string;
+  filename: string;
+  content: string;
+  metadata?: any;
+}) => {
+  try {
+    console.log(`Adding document to local storage: ${request.filename}`);
+    
+    // Initialize chat controller if needed
+    if (!chatController) {
+      chatController = new ChatController(true);
+    }
+    
+    await chatController.addDocumentToLocalStorage(
+      request.documentId,
+      request.filename,
+      request.content,
+      request.metadata
+    );
+    
+    return {
+      success: true,
+      message: 'Document added to local storage successfully',
+    };
+  } catch (error) {
+    console.error('Failed to add document to local storage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+/**
+ * Get stored documents from local storage
+ */
+ipcMain.handle('ai:getStoredDocuments', async () => {
+  try {
+    if (!chatController) {
+      chatController = new ChatController(true);
+    }
+    
+    const documents = chatController.getStoredDocuments();
+    
+    return {
+      success: true,
+      documents,
+    };
+  } catch (error) {
+    console.error('Failed to get stored documents:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      documents: [],
+    };
+  }
+});
+
+/**
+ * Clear all stored documents from local storage
+ */
+ipcMain.handle('ai:clearStoredDocuments', async () => {
+  try {
+    if (!chatController) {
+      chatController = new ChatController(true);
+    }
+    
+    chatController.clearStoredDocuments();
+    
+    return {
+      success: true,
+      message: 'All stored documents cleared',
+    };
+  } catch (error) {
+    console.error('Failed to clear stored documents:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+/**
+ * Migrate existing local storage data to ChatBot system
+ */
+ipcMain.handle('ai:migrateExistingData', async () => {
+  try {
+    if (!localStorageMigrator) {
+      localStorageMigrator = new LocalStorageMigrator();
+    }
+    
+    // Try direct JSON migration first
+    const directResult = await localStorageMigrator.migrateFromKnownJSON();
+    if (directResult.success && directResult.migratedCount > 0) {
+      return {
+        success: true,
+        migratedCount: directResult.migratedCount,
+        errors: directResult.errors,
+        message: `Migrated ${directResult.migratedCount} documents from JSON successfully`,
+      };
+    }
+    
+    // Fallback to regular migration
+    const result = await localStorageMigrator.migrateExistingData();
+    
+    return {
+      success: result.success,
+      migratedCount: result.migratedCount,
+      errors: result.errors,
+      message: `Migrated ${result.migratedCount} documents successfully`,
+    };
+  } catch (error) {
+    console.error('Failed to migrate existing data:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      migratedCount: 0,
+      errors: [error instanceof Error ? error.message : 'Unknown error'],
+    };
+  }
+});
+
+/**
+ * Get migration status
+ */
+ipcMain.handle('ai:getMigrationStatus', async () => {
+  try {
+    if (!localStorageMigrator) {
+      localStorageMigrator = new LocalStorageMigrator();
+    }
+    
+    const status = await localStorageMigrator.getMigrationStatus();
+    
+    return {
+      success: true,
+      status,
+    };
+  } catch (error) {
+    console.error('Failed to get migration status:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      status: {
+        totalConversions: 0,
+        migratedDocuments: 0,
+        needsMigration: false,
+      },
+    };
+  }
+});
+
+/**
+ * Clear migrated data
+ */
+ipcMain.handle('ai:clearMigratedData', async () => {
+  try {
+    if (!localStorageMigrator) {
+      localStorageMigrator = new LocalStorageMigrator();
+    }
+    
+    localStorageMigrator.clearMigratedData();
+    
+    return {
+      success: true,
+      message: 'All migrated data cleared',
+    };
+  } catch (error) {
+    console.error('Failed to clear migrated data:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+/**
+ * Handle chat query
+ */
+ipcMain.handle('ai:chatQuery', async (event, request: { 
+  userId: string; 
+  query: string; 
+  options?: any;
+}) => {
+  try {
+    console.log(`AI Chat Query received: "${request.query}"`);
+    
+    // Lazy initialize controller if needed (use local storage by default)
+    if (!chatController) {
+      chatController = new ChatController(true);
+      console.log('ChatController lazy-initialized with local storage enabled');
+    }
+    
+    // Debug: Check how many documents are stored
+    const storedDocs = chatController.getStoredDocuments();
+    console.log(`ChatController: Found ${storedDocs.length} documents in local storage`);
+    
+    // Process the query
+    const response = await chatController.handleChatQuery(request);
+    
+    console.log(`AI Chat Query completed: success=${response.success}`);
+    return response;
+  } catch (error) {
+    console.error('AI Chat Query failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+    };
+  }
+});
+
+/**
+ * Handle deep analysis chat query with critic verification
+ */
+ipcMain.handle('ai:chatQueryDeep', async (event, request: { 
+  userId: string; 
+  query: string; 
+  options?: any;
+  config?: {
+    enableCritic?: boolean;
+    criticModel?: 'mistral' | 'local';
+    escalateModel?: string;
+    timeout?: number;
+    criticTimeout?: number;
+  };
+}) => {
+  try {
+    console.log(`AI Deep Analysis Query received: "${request.query}"`);
+    console.log(`Deep Analysis Config:`, request.config);
+    
+    // Lazy initialize controller if needed (use local storage by default)
+    if (!chatController) {
+      chatController = new ChatController(true);
+      console.log('ChatController lazy-initialized with local storage enabled');
+    }
+    
+    // Debug: Check how many documents are stored
+    const storedDocs = chatController.getStoredDocuments();
+    console.log(`ChatController: Found ${storedDocs.length} documents in local storage`);
+    
+    // Process the query with deep analysis
+    const response = await chatController.chatQueryDeep(request, request.config || {});
+    
+    console.log(`AI Deep Analysis Query completed: success=${response.success}`);
+    if (response.payload?.modelMeta?.criticVerified !== undefined) {
+      console.log(`Critic verified: ${response.payload.modelMeta.criticVerified}`);
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('AI Deep Analysis Query failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+    };
+  }
+});
+
+/**
+ * Check AI services health
+ */
+ipcMain.handle('ai:healthCheck', async () => {
+  try {
+    if (!chatController) {
+      chatController = new ChatController(true);
+    }
+    
+    const health = await chatController.healthCheck();
+    
+    return {
+      success: true,
+      health,
+      allHealthy: health.embed && health.retrieval && health.mistral,
+    };
+  } catch (error) {
+    console.error('AI health check failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Health check failed',
+    };
+  }
+});
+
+/**
+ * DEBUG: Test retrieval directly
+ */
+ipcMain.handle('ai:debugRetrieval', async () => {
+  try {
+    console.log('\n' + '='.repeat(80));
+    console.log('🔍 DEBUG RETRIEVAL TEST STARTING');
+    console.log('='.repeat(80));
+    
+    if (!chatController) {
+      chatController = new ChatController(true);
+      console.log('Created new ChatController with local storage');
+    }
+    
+    // Get stored documents
+    const docs = chatController.getStoredDocuments();
+    console.log(`Found ${docs.length} documents in storage`);
+    docs.forEach((doc: any, i: number) => {
+      console.log(`  ${i + 1}. ${doc.filename} (${doc.content?.length || 0} chars, ${doc.chunks?.length || 0} chunks)`);
+    });
+    
+    if (docs.length === 0) {
+      return {
+        success: false,
+        error: 'No documents in storage',
+        documents: [],
+        retrievalResults: []
+      };
+    }
+    
+    // Generate a simple query embedding (mock for now)
+    const { EmbedClient } = await import('./ai/embedClient');
+    const embedClient = new EmbedClient();
+    
+    console.log('\nGenerating query embedding for: "test"');
+    const queryEmbedding = await embedClient.embedQuery('test');
+    console.log(`Query embedding generated: ${queryEmbedding.length} dimensions`);
+    
+    // Try retrieval
+    const { LocalRetrievalClient } = await import('./ai/localRetrievalClient');
+    const localRetrieval = new LocalRetrievalClient();
+    
+    console.log('\nAttempting retrieval...');
+    const results = await localRetrieval.retrieve(queryEmbedding, { topK: 10, threshold: 0.01 });
+    
+    console.log(`\n✅ Retrieval complete: Found ${results.length} results`);
+    results.forEach((r: any, i: number) => {
+      console.log(`  ${i + 1}. ${r.filename} (similarity: ${r.similarity.toFixed(4)})`);
+    });
+    
+    console.log('='.repeat(80) + '\n');
+    
+    return {
+      success: true,
+      documents: docs,
+      queryEmbeddingLength: queryEmbedding.length,
+      retrievalResults: results.map((r: any) => ({
+        filename: r.filename,
+        similarity: r.similarity,
+        contentPreview: r.content.substring(0, 100)
+      }))
+    };
+    
+  } catch (error) {
+    console.error('❌ Debug retrieval failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    };
+  }
+});
+
+console.log('AI Chat IPC handlers registered:');
+console.log('- ai:initializeChatController');
+console.log('- ai:chatQuery');
+console.log('- ai:chatQueryDeep');
+console.log('- ai:healthCheck');

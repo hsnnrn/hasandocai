@@ -12,6 +12,7 @@ import {
   CheckCircle,
   HardDrive,
   FolderOpen,
+  MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { SupabaseLoginModal } from '@/components/SupabaseLoginModal'
@@ -24,6 +25,11 @@ const navItems = [
     name: 'Converter',
     href: '/',
     icon: FileText,
+  },
+  {
+    name: 'AI Chat',
+    href: '/chat',
+    icon: MessageSquare,
   },
   {
     name: 'Groups',
