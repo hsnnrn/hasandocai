@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Debug Helper</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #000;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 25px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-left: 4px solid #000;
+            border-radius: 4px;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #000;
+            font-size: 18px;
+        }
+        button {
+            background: #000;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #333;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .status {
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-weight: 600;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .code-block {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            background: #f4f4f4;
+            padding: 3px 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 DocDataApp Chatbot Debug Helper</h1>
+        
+        <p><strong>Not:</strong> Bu sayfayı Electron uygulaması içinde açmanız gerekir. Normal tarayıcıda <code>window.electronAPI</code> mevcut olmayacaktır.</p>
+        
+        <!-- Test 1: Check localStorage -->
+        <div class="test-section">
+            <h2>1. 📦 localStorage Belge Kontrolü</h2>
+            <p>PersistentLocalStorage ve LocalDataService'deki belgeleri kontrol eder.</p>
+            <button onclick="checkLocalStorage()">Belgeleri Kontrol Et</button>
+            <div id="storage-result"></div>
+        </div>
+
+        <!-- Test 2: Check LOCAL_DOCS -->
+        <div class="test-section">
+            <h2>2. 📚 LOCAL_DOCS Format Kontrolü</h2>
+            <p>Chatbot'un kullandığı LOCAL_DOCS formatında belgeleri gösterir.</p>
+            <button onclick="checkLocalDocs()">LOCAL_DOCS Kontrol Et</button>
+            <div id="localdocs-result"></div>
+        </div>
+
+        <!-- Test 3: Check Ollama -->
+        <div class="test-section">
+            <h2>3. 🤖 Ollama LLM Durumu</h2>
+            <p>Ollama sunucusunun çalışıp çalışmadığını kontrol eder.</p>
+            <button onclick="checkOllama()">Ollama Kontrol Et</button>
+            <button onclick="startOllama()">Ollama Başlat</button>
+            <div id="ollama-result"></div>
+        </div>
+
+        <!-- Test 4: Test AI Query -->
+        <div class="test-section">
+            <h2>4. 💬 AI Sorgu Testi</h2>
+            <p>Chatbot'a basit bir test sorusu gönderir.</p>
+            <button onclick="testSimpleQuery()">Basit Sohbet Test Et</button>
+            <button onclick="testDocumentQuery()">Doküman Asistanı Test Et</button>
+            <div id="query-result"></div>
+        </div>
+
+        <!-- Test 5: Debug Storage -->
+        <div class="test-section">
+            <h2>5. 🔍 Derinlemesine Storage Analizi</h2>
+            <p>Storage'daki tüm verileri detaylı analiz eder.</p>
+            <button onclick="debugStorage()">Storage Debug</button>
+            <div id="debug-result"></div>
+        </div>
+    </div>
+
+    <script>
+        // Helper function to display results
+        function displayResult(elementId, content, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="status ${type}">${content}</div>`;
+        }
+
+        function displayJSON(elementId, title, data) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `
+                <div class="status info">${title}</div>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+        }
+
+        // Test 1: Check localStorage
+        async function checkLocalStorage() {
+            try {
+                displayResult('storage-result', '⏳ Kontrol ediliyor...', 'info');
+                
+                const allData = await window.electronAPI.persistentStorage.getAllData();
+                const stats = await window.electronAPI.persistentStorage.getStats();
+                
+                if (allData.length === 0) {
+                    displayResult('storage-result', 
+                        `❌ Hiç belge bulunamadı!<br><br>
+                        <strong>Çözüm:</strong><br>
+                        1. Ana sayfadan belge yükleyin (PDF, DOCX, Excel)<br>
+                        2. "Process" butonuna tıklayın<br>
+                        3. İşlem tamamlandıktan sonra bu testi tekrar çalıştırın`,
+                        'error');
+                } else {
+                    displayJSON('storage-result', 
+                        `✅ ${allData.length} belge bulundu!`,
+                        {
+                            totalCount: allData.length,
+                            stats: stats,
+                            sampleDocuments: allData.slice(0, 3).map(doc => ({
+                                id: doc.id,
+                                type: doc.type,
+                                filename: doc.content?.filename || doc.metadata?.source || 'unknown',
+                                hasContent: !!doc.content,
+                                contentKeys: doc.content ? Object.keys(doc.content) : []
+                            }))
+                        });
+                }
+            } catch (error) {
+                displayResult('storage-result', 
+                    `❌ Hata: ${error.message}<br><br>Bu sayfayı Electron uygulaması içinde açtığınızdan emin olun.`,
+                    'error');
+            }
+        }
+
+        // Test 2: Check LOCAL_DOCS
+        async function checkLocalDocs() {
+            try {
+                displayResult('localdocs-result', '⏳ LOCAL_DOCS kontrol ediliyor...', 'info');
+                
+                const result = await window.electronAPI.persistentStorage.getLocalDocs();
+                
+                if (!result.success) {
+                    displayResult('localdocs-result', 
+                        `❌ LOCAL_DOCS yüklenemedi: ${result.error}`,
+                        'error');
+                } else if (result.count === 0) {
+                    displayResult('localdocs-result', 
+                        `⚠️ LOCAL_DOCS formatında hiç belge yok!<br><br>
+                        Bu, belgelerinizin text content'i olmadığı anlamına gelebilir.<br>
+                        Belgelerinizi tekrar process edin.`,
+                        'error');
+                } else {
+                    const totalSections = result.documents.reduce((acc, doc) => acc + doc.textSections.length, 0);
+                    
+                    displayJSON('localdocs-result', 
+                        `✅ ${result.count} belge, ${totalSections} metin bölümü`,
+                        {
+                            documentCount: result.count,
+                            totalTextSections: totalSections,
+                            documents: result.documents.map(doc => ({
+                                filename: doc.filename,
+                                fileType: doc.fileType,
+                                sectionsCount: doc.textSections.length,
+                                firstSectionPreview: doc.textSections[0]?.content.substring(0, 100) + '...'
+                            }))
+                        });
+                }
+            } catch (error) {
+                displayResult('localdocs-result', 
+                    `❌ Hata: ${error.message}`,
+                    'error');
+            }
+        }
+
+        // Test 3: Check Ollama
+        async function checkOllama() {
+            try {
+                displayResult('ollama-result', '⏳ Ollama kontrol ediliyor...', 'info');
+                
+                const status = await window.electronAPI.ollama.getStatus();
+                
+                if (status.running) {
+                    displayJSON('ollama-result', 
+                        '✅ Ollama çalışıyor!',
+                        status);
+                } else {
+                    displayResult('ollama-result', 
+                        `⚠️ Ollama çalışmıyor!<br><br>
+                        <strong>Çözüm:</strong><br>
+                        1. "Ollama Başlat" butonuna tıklayın<br>
+                        2. VEYA terminal'de: <code>ollama serve</code>`,
+                        'error');
+                }
+            } catch (error) {
+                displayResult('ollama-result', 
+                    `❌ Hata: ${error.message}`,
+                    'error');
+            }
+        }
+
+        // Start Ollama
+        async function startOllama() {
+            try {
+                displayResult('ollama-result', '⏳ Ollama başlatılıyor...', 'info');
+                
+                const result = await window.electronAPI.ollama.start();
+                
+                if (result.success) {
+                    displayResult('ollama-result', 
+                        '✅ Ollama başarıyla başlatıldı!',
+                        'success');
+                } else {
+                    displayResult('ollama-result', 
+                        `❌ Başlatılamadı: ${result.error}<br><br>
+                        Terminal'de manuel başlatın: <code>ollama serve</code>`,
+                        'error');
+                }
+            } catch (error) {
+                displayResult('ollama-result', 
+                    `❌ Hata: ${error.message}`,
+                    'error');
+            }
+        }
+
+        // Test 4: Test AI Query
+        async function testSimpleQuery() {
+            try {
+                displayResult('query-result', '⏳ Basit sohbet test ediliyor...', 'info');
+                
+                const response = await window.aiAPI.chatQuery({
+                    userId: 'debug_test',
+                    query: 'Merhaba, bu bir test mesajıdır. Kısaca cevap ver.',
+                    conversationHistory: []
+                });
+                
+                if (response.success) {
+                    displayJSON('query-result', 
+                        '✅ Basit sohbet çalışıyor!',
+                        {
+                            answer: response.payload.answer,
+                            model: response.payload.modelMeta.model,
+                            latencyMs: response.payload.modelMeta.latencyMs
+                        });
+                } else {
+                    displayResult('query-result', 
+                        `❌ AI yanıt veremedi: ${response.error}<br><br>
+                        Ollama'nın çalıştığından ve model yüklü olduğundan emin olun:<br>
+                        <code>ollama list</code>`,
+                        'error');
+                }
+            } catch (error) {
+                displayResult('query-result', 
+                    `❌ Hata: ${error.message}`,
+                    'error');
+            }
+        }
+
+        async function testDocumentQuery() {
+            try {
+                displayResult('query-result', '⏳ Doküman asistanı test ediliyor...', 'info');
+                
+                // First get localDocs
+                const docsResult = await window.electronAPI.persistentStorage.getLocalDocs();
+                
+                if (docsResult.count === 0) {
+                    displayResult('query-result', 
+                        '❌ Hiç belge yok! Önce belge yükleyin.',
+                        'error');
+                    return;
+                }
+                
+                const response = await window.aiAPI.documentChatQuery({
+                    userId: 'debug_test',
+                    query: 'Hangi belgeler var? Kısaca listele.',
+                    localDocs: docsResult.documents,
+                    options: {
+                        compute: true,
+                        showRaw: false,
+                        maxRefs: 5,
+                        locale: 'tr-TR'
+                    },
+                    conversationHistory: []
+                });
+                
+                if (response.success) {
+                    displayJSON('query-result', 
+                        '✅ Doküman asistanı çalışıyor!',
+                        {
+                            answer: response.payload.answer,
+                            foundReferences: response.payload.meta?.foundReferences?.length || 0,
+                            model: response.payload.modelMeta.model,
+                            latencyMs: response.payload.modelMeta.latencyMs
+                        });
+                } else {
+                    displayResult('query-result', 
+                        `❌ Doküman analizi başarısız: ${response.error}`,
+                        'error');
+                }
+            } catch (error) {
+                displayResult('query-result', 
+                    `❌ Hata: ${error.message}`,
+                    'error');
+            }
+        }
+
+        // Test 5: Debug Storage
+        async function debugStorage() {
+            try {
+                displayResult('debug-result', '⏳ Storage analiz ediliyor...', 'info');
+                
+                const result = await window.electronAPI.debug.checkStorage();
+                
+                if (result.success) {
+                    displayJSON('debug-result', 
+                        '✅ Storage analizi tamamlandı',
+                        result.data);
+                } else {
+                    displayResult('debug-result', 
+                        `❌ Debug başarısız: ${result.error}`,
+                        'error');
+                }
+            } catch (error) {
+                displayResult('debug-result', 
+                    `❌ Hata: ${error.message}`,
+                    'error');
+            }
+        }
+
+        // Auto-check on page load
+        window.addEventListener('load', () => {
+            if (typeof window.electronAPI === 'undefined') {
+                document.body.innerHTML = `
+                    <div class="container">
+                        <h1>❌ Hata</h1>
+                        <div class="status error">
+                            <strong>Bu sayfa Electron uygulaması içinde açılmalıdır!</strong><br><br>
+                            Lütfen DocDataApp'i çalıştırın ve uygulamadan bu sayfayı açın:<br>
+                            <code>npm run dev</code>
+                        </div>
+                    </div>
+                `;
+            } else {
+                console.log('✅ electronAPI yüklendi');
+                console.log('🔧 Debug helper hazır!');
+            }
+        });
+    </script>
+</body>
+</html>
+

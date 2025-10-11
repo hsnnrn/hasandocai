@@ -1,6 +1,9 @@
 /**
  * Local Storage Service for AI Data
- * Handles saving and retrieving AI-generated data locally
+ * ✅ SADE VE BASİT: Sadece Electron persistent storage kullanır
+ * - Her zaman diske kaydeder (veri kaybı olmaz)
+ * - Browser localStorage kullanmaz
+ * - Enabled/disabled kontrolü yok (her zaman aktif)
  */
 
 export interface AIData {
@@ -25,271 +28,191 @@ export interface LocalStorageStats {
 }
 
 class LocalStorageService {
-  private readonly PREFIX = 'ai-data-'
-  private readonly METADATA_KEY = 'ai-storage-metadata'
+  constructor() {
+    console.log('✅ Local Storage Service - HER ZAMAN AKTİF')
+  }
 
   /**
    * Check if local storage is enabled
+   * ✅ HER ZAMAN TRUE - veri kaybı olmaz
    */
   isEnabled(): boolean {
-    return localStorage.getItem('local-storage-enabled') === 'true'
+    return true
   }
 
   /**
-   * Enable or disable local storage
+   * Enable or disable local storage (artık gerek yok ama uyumluluk için)
    */
   setEnabled(enabled: boolean): void {
-    localStorage.setItem('local-storage-enabled', enabled.toString())
-    localStorage.setItem('local-storage-last-updated', new Date().toISOString())
+    // Artık bir şey yapmıyor - her zaman aktif
+    console.log('ℹ️ Local storage her zaman aktif - bu ayar artık kullanılmıyor')
   }
 
   /**
-   * Save AI data to local storage
+   * Save AI data to persistent storage
+   * ✅ SADE VE BASİT: Sadece persistent storage'a kaydet
    */
-  saveData(data: AIData): boolean {
-    if (!this.isEnabled()) {
-      console.warn('Local storage is disabled')
-      return false
-    }
-
+  async saveData(data: AIData): Promise<{ 
+    success: boolean
+    error?: string 
+  }> {
     try {
-      const key = `${this.PREFIX}${data.id}`
-      const dataToStore = {
-        ...data,
-        savedAt: new Date().toISOString()
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
+        throw new Error('Persistent storage not available')
       }
+
+      const result = await electronAPI.persistentStorage.saveData(data)
       
-      localStorage.setItem(key, JSON.stringify(dataToStore))
-      this.updateMetadata()
-      
-      console.log(`AI data saved locally: ${data.id}`)
-      return true
+      if (result?.success) {
+        console.log(`💾 Veri kaydedildi: ${data.id}`)
+        return { success: true }
+      } else {
+        throw new Error(result?.error || 'Save failed')
+      }
     } catch (error) {
-      console.error('Failed to save AI data to local storage:', error)
-      return false
+      console.error('❌ Kaydetme hatası:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
     }
   }
 
   /**
-   * Retrieve AI data from local storage
+   * Retrieve AI data from persistent storage
+   * ✅ SADE VE BASİT: Persistent storage'dan oku
    */
-  getData(id: string): AIData | null {
-    if (!this.isEnabled()) {
-      return null
-    }
-
+  async getData(id: string): Promise<AIData | null> {
     try {
-      const key = `${this.PREFIX}${id}`
-      const stored = localStorage.getItem(key)
-      
-      if (!stored) {
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
         return null
       }
 
-      const parsed = JSON.parse(stored)
-      // Remove the savedAt field as it's not part of the AIData interface
-      const { savedAt, ...data } = parsed
-      return data as AIData
+      const result = await electronAPI.persistentStorage.getData(id)
+      return result?.success ? result.data : null
     } catch (error) {
-      console.error('Failed to retrieve AI data from local storage:', error)
+      console.error('Failed to retrieve AI data:', error)
       return null
     }
   }
 
   /**
    * Get all AI data of a specific type
+   * ✅ SADE VE BASİT: Persistent storage'dan oku
    */
-  getDataByType(type: AIData['type']): AIData[] {
-    if (!this.isEnabled()) {
-      return []
-    }
-
-    const results: AIData[] = []
-    
+  async getDataByType(type: AIData['type']): Promise<AIData[]> {
     try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith(this.PREFIX)) {
-          const stored = localStorage.getItem(key)
-          if (stored) {
-            try {
-              const parsed = JSON.parse(stored)
-              const { savedAt, ...data } = parsed
-              
-              if (data.type === type) {
-                results.push(data as AIData)
-              }
-            } catch (parseError) {
-              console.warn(`Failed to parse stored data for key ${key}:`, parseError)
-            }
-          }
-        }
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
+        return []
       }
+
+      const result = await electronAPI.persistentStorage.getDataByType(type)
+      return result?.success ? result.data : []
     } catch (error) {
       console.error('Failed to retrieve AI data by type:', error)
+      return []
     }
-
-    return results
   }
 
   /**
    * Get all stored AI data
+   * ✅ SADE VE BASİT: Persistent storage'dan oku
    */
-  getAllData(): AIData[] {
-    if (!this.isEnabled()) {
-      return []
-    }
-
-    const results: AIData[] = []
-    
+  async getAllData(): Promise<AIData[]> {
     try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith(this.PREFIX)) {
-          const stored = localStorage.getItem(key)
-          if (stored) {
-            try {
-              const parsed = JSON.parse(stored)
-              const { savedAt, ...data } = parsed
-              results.push(data as AIData)
-            } catch (parseError) {
-              console.warn(`Failed to parse stored data for key ${key}:`, parseError)
-            }
-          }
-        }
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
+        return []
       }
+
+      const result = await electronAPI.persistentStorage.getAllData()
+      return result?.success ? result.data : []
     } catch (error) {
       console.error('Failed to retrieve all AI data:', error)
+      return []
     }
-
-    return results
   }
 
   /**
    * Delete specific AI data
+   * ✅ SADE VE BASİT: Persistent storage'dan sil
    */
-  deleteData(id: string): boolean {
-    if (!this.isEnabled()) {
-      return false
-    }
-
+  async deleteData(id: string): Promise<boolean> {
     try {
-      const key = `${this.PREFIX}${id}`
-      localStorage.removeItem(key)
-      this.updateMetadata()
-      
-      console.log(`AI data deleted from local storage: ${id}`)
-      return true
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
+        return false
+      }
+
+      const result = await electronAPI.persistentStorage.deleteData(id)
+      return result?.success || false
     } catch (error) {
-      console.error('Failed to delete AI data from local storage:', error)
+      console.error('Failed to delete AI data:', error)
       return false
     }
   }
 
   /**
    * Clear all AI data
+   * ✅ SADE VE BASİT: Persistent storage'ı temizle
    */
-  clearAllData(): boolean {
-    if (!this.isEnabled()) {
-      return false
-    }
-
+  async clearAllData(): Promise<boolean> {
     try {
-      const keysToRemove: string[] = []
-      
-      // Collect all AI data keys
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith(this.PREFIX)) {
-          keysToRemove.push(key)
-        }
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
+        return false
       }
-      
-      // Remove all AI data keys
-      keysToRemove.forEach(key => localStorage.removeItem(key))
-      
-      this.updateMetadata()
-      
-      console.log(`Cleared ${keysToRemove.length} AI data items from local storage`)
-      return true
+
+      const result = await electronAPI.persistentStorage.clearAllData()
+      return result?.success || false
     } catch (error) {
-      console.error('Failed to clear AI data from local storage:', error)
+      console.error('Failed to clear AI data:', error)
       return false
     }
   }
 
   /**
    * Get storage statistics
+   * ✅ SADE VE BASİT: Persistent storage'dan istatistik al
    */
-  getStats(): LocalStorageStats {
-    const stats: LocalStorageStats = {
+  async getStats(): Promise<LocalStorageStats> {
+    const defaultStats: LocalStorageStats = {
       totalItems: 0,
       totalSize: 0,
       lastUpdated: '',
       itemsByType: {}
     }
 
-    if (!this.isEnabled()) {
-      return stats
-    }
-
     try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith(this.PREFIX)) {
-          const stored = localStorage.getItem(key)
-          if (stored) {
-            try {
-              const parsed = JSON.parse(stored)
-              const { savedAt, ...data } = parsed
-              
-              stats.totalItems++
-              stats.totalSize += key.length + stored.length
-              
-              // Count by type
-              if (!stats.itemsByType[data.type]) {
-                stats.itemsByType[data.type] = 0
-              }
-              stats.itemsByType[data.type]++
-              
-              // Update last updated if this is newer
-              if (savedAt && (!stats.lastUpdated || savedAt > stats.lastUpdated)) {
-                stats.lastUpdated = savedAt
-              }
-            } catch (parseError) {
-              console.warn(`Failed to parse stored data for key ${key}:`, parseError)
-            }
-          }
-        }
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
+        return defaultStats
       }
-      
-      // Convert size to KB
-      stats.totalSize = Math.round(stats.totalSize / 1024)
+
+      const result = await electronAPI.persistentStorage.getStats()
+      return result?.success ? result.stats : defaultStats
     } catch (error) {
       console.error('Failed to get storage stats:', error)
+      return defaultStats
     }
-
-    return stats
   }
 
   /**
    * Export all AI data as JSON
+   * ✅ SADE VE BASİT: Persistent storage'dan export
    */
-  exportData(): string | null {
-    if (!this.isEnabled()) {
-      return null
-    }
-
+  async exportData(): Promise<string | null> {
     try {
-      const allData = this.getAllData()
-      const exportData = {
-        version: '1.0',
-        exportedAt: new Date().toISOString(),
-        totalItems: allData.length,
-        data: allData
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
+        return null
       }
-      
-      return JSON.stringify(exportData, null, 2)
+
+      const result = await electronAPI.persistentStorage.exportData()
+      return result?.success ? result.data : null
     } catch (error) {
       console.error('Failed to export AI data:', error)
       return null
@@ -298,145 +221,66 @@ class LocalStorageService {
 
   /**
    * Import AI data from JSON
+   * ✅ SADE VE BASİT: Persistent storage'a import
    */
-  importData(jsonData: string): { success: boolean; imported: number; errors: string[] } {
-    const result = {
+  async importData(jsonData: string): Promise<{ success: boolean; imported: number; errors: string[] }> {
+    const defaultResult = {
       success: false,
       imported: 0,
       errors: [] as string[]
     }
 
-    if (!this.isEnabled()) {
-      result.errors.push('Local storage is disabled')
-      return result
-    }
-
     try {
-      const parsed = JSON.parse(jsonData)
-      
-      if (!parsed.data || !Array.isArray(parsed.data)) {
-        result.errors.push('Invalid data format')
-        return result
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
+        defaultResult.errors.push('Persistent storage not available')
+        return defaultResult
       }
 
-      for (const item of parsed.data) {
-        try {
-          // Validate required fields
-          if (!item.id || !item.type || !item.content || !item.metadata) {
-            result.errors.push(`Invalid item: missing required fields`)
-            continue
-          }
-
-          // Save the item
-          const success = this.saveData(item)
-          if (success) {
-            result.imported++
-          } else {
-            result.errors.push(`Failed to save item: ${item.id}`)
-          }
-        } catch (itemError) {
-          result.errors.push(`Error processing item: ${itemError}`)
-        }
-      }
-
-      result.success = result.imported > 0
+      const result = await electronAPI.persistentStorage.importData(jsonData)
+      return result || defaultResult
     } catch (error) {
-      result.errors.push(`Failed to parse JSON data: ${error}`)
-    }
-
-    return result
-  }
-
-  /**
-   * Update metadata about stored data
-   */
-  private updateMetadata(): void {
-    try {
-      const stats = this.getStats()
-      const metadata = {
-        lastUpdated: new Date().toISOString(),
-        stats
-      }
-      
-      localStorage.setItem(this.METADATA_KEY, JSON.stringify(metadata))
-    } catch (error) {
-      console.error('Failed to update metadata:', error)
+      defaultResult.errors.push(`Import failed: ${error}`)
+      return defaultResult
     }
   }
 
   /**
    * Get data by file path (useful for finding related data)
+   * ✅ SADE VE BASİT: Persistent storage'dan ara
    */
-  getDataByFilePath(filePath: string): AIData[] {
-    if (!this.isEnabled()) {
-      return []
-    }
-
-    const results: AIData[] = []
-    
+  async getDataByFilePath(filePath: string): Promise<AIData[]> {
     try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith(this.PREFIX)) {
-          const stored = localStorage.getItem(key)
-          if (stored) {
-            try {
-              const parsed = JSON.parse(stored)
-              const { savedAt, ...data } = parsed
-              
-              if (data.filePath === filePath) {
-                results.push(data as AIData)
-              }
-            } catch (parseError) {
-              console.warn(`Failed to parse stored data for key ${key}:`, parseError)
-            }
-          }
-        }
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
+        return []
       }
+
+      const result = await electronAPI.persistentStorage.getDataByFilePath(filePath)
+      return result?.success ? result.data : []
     } catch (error) {
       console.error('Failed to retrieve AI data by file path:', error)
+      return []
     }
-
-    return results
   }
 
   /**
    * Search AI data by content or metadata
+   * ✅ SADE VE BASİT: Persistent storage'da ara
    */
-  searchData(query: string): AIData[] {
-    if (!this.isEnabled()) {
-      return []
-    }
-
-    const results: AIData[] = []
-    const searchTerm = query.toLowerCase()
-    
+  async searchData(query: string): Promise<AIData[]> {
     try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith(this.PREFIX)) {
-          const stored = localStorage.getItem(key)
-          if (stored) {
-            try {
-              const parsed = JSON.parse(stored)
-              const { savedAt, ...data } = parsed
-              
-              // Search in content and metadata
-              const searchableText = JSON.stringify(data).toLowerCase()
-              if (searchableText.includes(searchTerm)) {
-                results.push(data as AIData)
-              }
-            } catch (parseError) {
-              console.warn(`Failed to parse stored data for key ${key}:`, parseError)
-            }
-          }
-        }
+      const electronAPI = (window as any).electronAPI
+      if (!electronAPI?.persistentStorage) {
+        return []
       }
+
+      const result = await electronAPI.persistentStorage.searchData(query)
+      return result?.success ? result.data : []
     } catch (error) {
       console.error('Failed to search AI data:', error)
+      return []
     }
-
-    return results
   }
 }
 

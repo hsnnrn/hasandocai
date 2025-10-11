@@ -1,97 +1,76 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
 ## [Unreleased]
 
-### Added - Mistral RAG Chatbot (feature/mistral-chatbot-rag)
+### Added - AI Chatbot localStorage Integration 🤖📄
+- **Document Assistant Mode**: AI chatbot artık localStorage'daki belgeleri analiz edebilir
+- **LOCAL_DOCS Format Converter**: PersistentLocalStorage verilerini LOCAL_DOCS formatına dönüştürme
+- **IPC Handler - get-local-docs**: Belgeleri chatbot formatında getiren yeni API endpoint
+- **Dual Chat Modes**: Basit Sohbet ve Doküman Asistanı modları arasında geçiş
+- **Document Status UI**: Yüklenen belge sayısı ve metin bölümü sayısı göstergesi
+- **Smart Document Retrieval**: Keyword, partial, n-gram ve semantic matching ile hızlı arama
+- **Reference Display**: Kaynak gösterimi ve ilgililik puanı (relevance score)
+- **Numeric Aggregation**: Otomatik sayısal değer çıkarımı ve hesaplama (toplam, ortalama, vb.)
+- **Conversation Context**: Doküman asistanı modunda da konuşma geçmişi desteği
+- **User Guide**: CHATBOT_LOCALSTORAGE_GUIDE.md ile kapsamlı kullanım rehberi
 
-#### Core Features
-- **AI Chat Controller** (`src/main/ai/chatController.ts`) - Main orchestrator for RAG pipeline
-- **Mistral Client** (`src/main/ai/mistralClient.ts`) - Local Mistral 7B integration with Ollama support
-- **BGE-M3 Embed Client** (`src/main/ai/embedClient.ts`) - Query embedding generation wrapper
-- **Retrieval Client** (`src/main/ai/retrievalClient.ts`) - Dual vector DB support (pgvector/Qdrant)
-- **Numeric Extractor** (`src/main/ai/numericExtractor.ts`) - Deterministic extraction of amounts, dates, invoice IDs
-- **Aggregator** (`src/main/ai/aggregator.ts`) - Backend statistical calculations (sum, avg, median, dedupe)
-
-#### UI Components
-- **ChatBot Component** (`src/renderer/src/components/ChatBot/ChatBot.tsx`) - React chat interface
-  - Message history with user/assistant roles
-  - Stats display (count, sum, average, median)
-  - Provenance viewer (show sources)
-  - Health status indicators for BGE-M3 and Mistral
-  - Low confidence warnings
-  - Follow-up suggestions
-
-#### IPC & Communication
-- New IPC handlers in `src/main/ipc-handlers.ts`:
-  - `ai:initializeChatController` - Initialize chat system
-  - `ai:chatQuery` - Process user queries
-  - `ai:healthCheck` - Check AI services status
-- Updated `src/main/preload.ts` with `aiAPI` namespace
-- Type definitions for all IPC responses
-
-#### Testing
-- **numericExtractor tests** (`tests/numericExtractor.test.ts`)
-  - Turkish number format (1.234,56)
-  - US number format (1,234.56)
-  - Currency detection (TRY, USD, EUR)
-  - Date parsing (DD.MM.YYYY, YYYY-MM-DD, DD/MM/YYYY)
-  - Invoice ID patterns
-  - Edge cases (negatives, large numbers, mixed content)
-- **Aggregator tests** (`tests/aggregator.test.ts`)
-  - Deduplication logic
-  - Statistical calculations
-  - Currency grouping
-  - Median calculation (even/odd counts)
-  - Variance and standard deviation
-
-#### Database
-- **pgvector function** (`sql/pgvector_match_embeddings.sql`)
-  - Semantic search with cosine similarity
-  - Configurable threshold and top-K
-  - Optimized with ivfflat index
-
-#### Documentation
-- **Setup Guide** (`README-chatbot.md`)
-  - Quick start instructions
-  - Ollama, Docker, and llama.cpp options for Mistral
-  - Environment variable configuration
-  - Supabase and Qdrant setup
-  - Testing and benchmarking
-  - Troubleshooting guide
-  - Example queries
-
-### Technical Details
-
-#### Architecture
-- **Pipeline**: Query → Embed → Retrieve → Extract → Aggregate → Format → Response
-- **Correctness First**: Backend performs all numeric calculations (not LLM)
-- **Local-First**: 100% local processing, no cloud dependencies
-- **Fallback Support**: Works even if Mistral server is down
-
-#### Performance Targets
-- Total latency: < 2.5s per query
-- Embedding: < 100ms
-- Retrieval: < 500ms (50 chunks)
-- Extraction + Aggregation: < 100ms
-- Mistral formatting: < 2s
-
-#### Locale Support
-- Turkish number format (1.234,56)
-- Turkish currency (TL, TRY, ₺)
-- Turkish date format (DD.MM.YYYY)
-- US format fallback
+### Added - GPU & Performance
+- **GPU/CPU Toggle Switch**: Settings sayfasına GPU ve CPU arasında geçiş yapabilme özelliği eklendi
+- **AI Performance Settings**: GPU hızlandırma, GPU warmup ve context length ayarları
+- **GPU Status Monitor**: Gerçek zamanlı GPU durumu ve bellek kullanımı izleme
+- **GPU Memory Auto-Cleanup**: GPU belleği dolduğunda otomatik temizleme sistemi
+- **Manual GPU Cleanup**: Settings sayfasında tek tıkla GPU belleği temizleme butonu
+- **GPU Helper Utilities**: GPU kontrolü, bellek monitörü ve optimizasyon önerileri
+- **Gemma2 2B Integration**: Hızlı ve hafif inference için optimize edilmiş 2B model
+- **GPU Batch Files**: `start_ollama_gpu.bat` - GPU otomatik algılama ile Ollama başlatma
+- **GPU Documentation**: README-chatbot.md'ye kapsamlı GPU optimizasyon ve bellek yönetimi rehberi
 
 ### Changed
-- Updated `src/main/ipc-handlers.ts` with AI chat handlers
-- Extended `src/main/preload.ts` type definitions
+- **ChatBot Component**: Tamamen yeniden yazıldı - mod geçişi, belge yükleme, metadata gösterimi
+- **Document Retrieval**: retrieveRelevantSections ile optimize edilmiş belge arama
+- **Error Messages**: Daha açıklayıcı hata mesajları ve çözüm önerileri
+- **Gemma2 System Prompt**: TDK kurallarına uygun, öz ve profesyonel Türkçe yanıtlar için optimize edildi
+- **Temperature Settings**: 0.7'den 0.25'e düşürüldü (doğruluk odaklı)
+- **Repeat Penalty**: 1.1 eklendi (tekrarlayan yanıtları önlemek için)
+- **App Store**: AI ayarları için yeni state yönetimi eklendi
+
+### Performance
+- **Document Loading**: localStorage'dan belge yükleme < 100ms
+- **Local Retrieval**: Belge araması ve eşleştirme < 200ms (embedding olmadan)
+- **Token Optimization**: Sadece ilgili metin bölümleri gönderilir (max 5 referans)
+- **GPU Mode**: İlk yanıt süresi ~5-8s'den ~2-3s'ye düştü
+- **GPU Warmup**: İlk yanıt süresi ~0.3s'ye kadar indi
+- **Context Length**: Kullanıcı tanımlı (4000-32000 karakter arası)
+- **Auto GPU Cleanup**: Bellek eşiği aşıldığında otomatik model unload (~5-6GB serbest bırakır)
 
 ### Fixed
-- N/A (new feature)
+- **Conversation History**: ChatBot'ta conversation history artık doğru şekilde gönderiliyor
+- **Switch Component**: Import path düzeltildi (`@/utils/cn`)
+- **TypeScript Errors**: `anonKey` type hatası giderildi
+
+### Developer Experience
+- **Type Safety**: documentRetriever.ts ile tam TypeScript desteği
+- **Comprehensive Logging**: Her aşamada detaylı console.log çıktıları
+- **Error Handling**: Try-catch blokları ve anlamlı error messages
+- **Code Documentation**: Tüm fonksiyonlarda JSDoc comments
+
+## [1.0.0] - 2025-01-09
+
+### Added
+- Llama 3.2:3b AI Chatbot entegrasyonu
+- Local BGE-M3 embedding servisi
+- Supabase OAuth entegrasyonu
+- PDF, DOCX, Excel, PowerPoint analiz servisleri
+- Grup analiz özellikleri
+- Local storage migrator
+
+### Features
+- Deterministic numeric extraction
+- Backend aggregation (sum, avg, median)
+- Dual vector DB support (Supabase pgvector / Qdrant)
+- Fallback mode (template-based responses)
+- Turkish locale support
 
 ---
 
-## Previous Versions
-See git history for earlier changes.
-
+**Built with ❤️ for accurate, local-first AI document analysis**

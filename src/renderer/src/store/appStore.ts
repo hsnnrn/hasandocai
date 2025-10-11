@@ -58,6 +58,12 @@ export interface ConversionSettings {
   outputDirectory?: string
 }
 
+export interface AISettings {
+  gpuEnabled: boolean
+  gpuWarmup: boolean
+  maxContextLength: number
+}
+
 interface AppState {
   // Theme
   theme: 'light' | 'dark'
@@ -99,6 +105,10 @@ interface AppState {
   // Conversion settings
   conversionSettings: ConversionSettings
   setConversionSettings: (settings: Partial<ConversionSettings>) => void
+
+  // AI settings
+  aiSettings: AISettings
+  setAISettings: (settings: Partial<AISettings>) => void
 
   // Processing state
   isProcessing: boolean
@@ -398,6 +408,16 @@ export const useAppStore = create<AppState>()(
         conversionSettings: { ...state.conversionSettings, ...settings }
       })),
 
+      // AI settings
+      aiSettings: {
+        gpuEnabled: true,
+        gpuWarmup: true,
+        maxContextLength: 15000,
+      },
+      setAISettings: (settings) => set((state) => ({
+        aiSettings: { ...state.aiSettings, ...settings }
+      })),
+
       // Processing state
       isProcessing: false,
       setIsProcessing: (processing) => set({ isProcessing: processing }),
@@ -434,6 +454,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         theme: state.theme,
         conversionSettings: state.conversionSettings,
+        aiSettings: state.aiSettings,
         activeTab: state.activeTab,
         sidebarOpen: state.sidebarOpen,
         // Only store essential data, not the full content

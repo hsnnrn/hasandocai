@@ -106,6 +106,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
   initializeGroupAnalysisService: () => ipcRenderer.invoke('group:initializeGroupAnalysisService'),
   analyzeGroup: (groupData: any, analysisTypes?: string[]) => ipcRenderer.invoke('group:analyzeGroup', groupData, analysisTypes),
   getGroupAnalysisResults: (groupId: string) => ipcRenderer.invoke('group:getGroupAnalysisResults', groupId),
+
+  // Persistent Local Storage Methods (prevents data loss on PC restart)
+  persistentStorage: {
+    isEnabled: () => ipcRenderer.invoke('persistent-storage:is-enabled'),
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke('persistent-storage:set-enabled', enabled),
+    saveData: (data: any) => ipcRenderer.invoke('persistent-storage:save-data', data),
+    getData: (id: string) => ipcRenderer.invoke('persistent-storage:get-data', id),
+    getAllData: () => ipcRenderer.invoke('persistent-storage:get-all-data'),
+    getDataByType: (type: string) => ipcRenderer.invoke('persistent-storage:get-data-by-type', type),
+    getDataByFilePath: (filePath: string) => ipcRenderer.invoke('persistent-storage:get-data-by-file-path', filePath),
+    searchData: (query: string) => ipcRenderer.invoke('persistent-storage:search-data', query),
+    deleteData: (id: string) => ipcRenderer.invoke('persistent-storage:delete-data', id),
+    clearAllData: () => ipcRenderer.invoke('persistent-storage:clear-all-data'),
+    getStats: () => ipcRenderer.invoke('persistent-storage:get-stats'),
+    exportData: () => ipcRenderer.invoke('persistent-storage:export-data'),
+    importData: (jsonData: string) => ipcRenderer.invoke('persistent-storage:import-data', jsonData),
+    getPath: () => ipcRenderer.invoke('persistent-storage:get-path'),
+    getLocalDocs: () => ipcRenderer.invoke('persistent-storage:get-local-docs'),
+  },
+
+  // Debug Methods
+  debug: {
+    checkStorage: () => ipcRenderer.invoke('debug:check-storage'),
+  },
+
+  // Ollama Management Methods (auto-start AI server)
+  ollama: {
+    getStatus: () => ipcRenderer.invoke('ollama:status'),
+    start: () => ipcRenderer.invoke('ollama:start'),
+    stop: () => ipcRenderer.invoke('ollama:stop'),
+    ensureRunning: () => ipcRenderer.invoke('ollama:ensure-running'),
+  },
 });
 
 // AI Chat API
@@ -113,18 +145,17 @@ contextBridge.exposeInMainWorld('aiAPI', {
   // AI Chat Query Methods
   initializeChatController: () => ipcRenderer.invoke('ai:initializeChatController'),
   chatQuery: (request: any) => ipcRenderer.invoke('ai:chatQuery', request),
+  documentChatQuery: (request: any) => ipcRenderer.invoke('ai:documentChatQuery', request),
   healthCheck: () => ipcRenderer.invoke('ai:healthCheck'),
-  debugRetrieval: () => ipcRenderer.invoke('ai:debugRetrieval'),
-  
-  // Local Storage Document Methods
-  addDocumentToLocalStorage: (request: any) => ipcRenderer.invoke('ai:addDocumentToLocalStorage', request),
-  getStoredDocuments: () => ipcRenderer.invoke('ai:getStoredDocuments'),
-  clearStoredDocuments: () => ipcRenderer.invoke('ai:clearStoredDocuments'),
   
   // Migration Methods
   migrateExistingData: () => ipcRenderer.invoke('ai:migrateExistingData'),
   getMigrationStatus: () => ipcRenderer.invoke('ai:getMigrationStatus'),
   clearMigratedData: () => ipcRenderer.invoke('ai:clearMigratedData'),
+  
+  // Document Migration Methods (NEW - for semantic classification)
+  migrateAllDocuments: () => ipcRenderer.invoke('migration:migrateAllDocuments'),
+  getDocumentMigrationStatus: () => ipcRenderer.invoke('migration:getStatus'),
 });
 
 // Types for TypeScript
@@ -383,9 +414,7 @@ declare global {
         success: boolean;
         message?: string;
         health?: {
-          embed: boolean;
-          retrieval: boolean;
-          mistral: boolean;
+          llama: boolean;
         };
         error?: string;
       }>;
@@ -393,39 +422,18 @@ declare global {
       chatQuery: (request: {
         userId: string;
         query: string;
-        options?: {
-          currency?: string;
-          dateRange?: { from: string; to: string };
-          topK?: number;
-          locale?: 'tr' | 'us' | 'auto';
-        };
+        conversationHistory?: Array<{
+          role: 'user' | 'assistant';
+          content: string;
+        }>;
       }) => Promise<{
         success: boolean;
         payload?: {
           answer: string;
-          stats: {
-            count: number;
-            sum: number;
-            average: number;
-            median: number;
-            currency: string | null;
-          };
-          provenance: Array<{
-            sectionId: string;
-            documentId: string;
-            filename: string;
-            snippet: string;
-            similarity: number;
-            metadata?: any;
-          }>;
-          usedChunkIds: string[];
           modelMeta: {
             model: string;
             latencyMs: number;
-            fallback?: string;
           };
-          lowConfidence?: boolean;
-          suggestedFollowUp?: string;
         };
         error?: string;
       }>;
@@ -433,9 +441,7 @@ declare global {
       healthCheck: () => Promise<{
         success: boolean;
         health?: {
-          embed: boolean;
-          retrieval: boolean;
-          mistral: boolean;
+          llama: boolean;
         };
         allHealthy?: boolean;
         error?: string;
@@ -477,6 +483,30 @@ declare global {
         message?: string;
         error?: string;
       }>;
+    };
+
+    // Persistent Local Storage API (prevents data loss on PC restart)
+    persistentStorage: {
+      isEnabled: () => Promise<{ success: boolean; enabled: boolean; error?: string }>;
+      setEnabled: (enabled: boolean) => Promise<{ success: boolean; enabled?: boolean; error?: string }>;
+      saveData: (data: any) => Promise<{ success: boolean; error?: string }>;
+      getData: (id: string) => Promise<{ success: boolean; data: any; error?: string }>;
+      getAllData: () => Promise<{ success: boolean; data: any[]; error?: string }>;
+      getDataByType: (type: string) => Promise<{ success: boolean; data: any[]; error?: string }>;
+      getDataByFilePath: (filePath: string) => Promise<{ success: boolean; data: any[]; error?: string }>;
+      searchData: (query: string) => Promise<{ success: boolean; data: any[]; error?: string }>;
+      deleteData: (id: string) => Promise<{ success: boolean; error?: string }>;
+      clearAllData: () => Promise<{ success: boolean; error?: string }>;
+      getStats: () => Promise<{ success: boolean; stats: any; error?: string }>;
+      exportData: () => Promise<{ success: boolean; data?: string; error?: string }>;
+      importData: (jsonData: string) => Promise<{ success: boolean; imported: number; errors: string[] }>;
+      getPath: () => Promise<{ success: boolean; path: string; error?: string }>;
+      getLocalDocs: () => Promise<{ success: boolean; documents: any[]; count: number; error?: string }>;
+    };
+
+    // Debug API
+    debug: {
+      checkStorage: () => Promise<{ success: boolean; data?: any; error?: string }>;
     };
   }
 }

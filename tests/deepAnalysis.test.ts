@@ -3,7 +3,9 @@
  * 
  * Tests for:
  * 1. Duplicate detection in invoice IDs
- * 2. Outlier detection in amounts
+ * 2. Outlier detection in 
+ * 
+ * 
  * 3. Critic verification (mismatch detection)
  */
 
@@ -143,7 +145,7 @@ describe('Deep Analysis Pipeline - Outlier Detection', () => {
 
 describe('Deep Analysis Pipeline - Critic Verification Simulation', () => {
   // Note: These tests simulate what the critic should detect
-  // Actual critic testing would require mocking Mistral API
+  // Actual critic testing would require mocking Llama API
   
   it('should detect when sum is incorrect', () => {
     const amounts = [

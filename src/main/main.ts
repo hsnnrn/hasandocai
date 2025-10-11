@@ -325,7 +325,7 @@ async function exchangeCodeForToken(
     });
 
     // Try to get anon key from Management API
-    let anonKey = null;
+    let anonKey: string | undefined = undefined;
     try {
       console.log('🔑 Fetching anon key from Management API...');
       const anonKeyResponse = await fetch('https://api.supabase.com/v1/projects/' + process.env.SUPABASE_PROJECT_REF + '/api-keys', {
@@ -464,6 +464,86 @@ app.whenReady().then(async () => {
     console.error('❌ Error details:', error);
     // Don't exit, continue without OAuth server
     oauthServer = null;
+  }
+  
+  // GPU kontrolü ve Ollama otomatik başlatma
+  try {
+    console.log('🔥 Initializing GPU and AI services...');
+    
+    const { 
+      checkGPUAvailability, 
+      configureOllamaGPU, 
+      logGPUInfo,
+      startGPUMemoryMonitor 
+    } = await import('./utils/gpuHelper');
+    
+    const { ensureOllamaRunning, stopOllamaServer } = await import('./utils/ollamaManager');
+    
+    // GPU durumunu kontrol et ve logla
+    const gpuAvailable = await checkGPUAvailability();
+    await logGPUInfo();
+    
+    // GPU ayarlarını yapılandır (default: enabled if available)
+    const gpuMode = process.env.GPU_MODE || 'auto';
+    const shouldUseGPU = gpuMode === 'enabled' || (gpuMode === 'auto' && gpuAvailable);
+    configureOllamaGPU(shouldUseGPU);
+    
+    // ✅ OLLAMA OTOMATİK BAŞLATMA
+    console.log('🤖 Ollama sunucusu kontrol ediliyor...');
+    const ollamaStatus = await ensureOllamaRunning();
+    
+    if (ollamaStatus.running) {
+      console.log(`✅ Ollama çalışıyor (${ollamaStatus.url})`);
+      console.log(`🎮 GPU: ${ollamaStatus.gpuEnabled ? 'Aktif' : 'Devre Dışı'}`);
+    } else {
+      console.error('❌ Ollama başlatılamadı:', ollamaStatus.error || 'Bilinmeyen hata');
+      // Hata mesajını kullanıcıya göster (dialog ile)
+      const { dialog } = await import('electron');
+      dialog.showErrorBox(
+        'Ollama Başlatılamadı',
+        ollamaStatus.error || 'Ollama sunucusu başlatılamadı. Lütfen manuel olarak başlatın.'
+      );
+    }
+    
+    // App kapatılırken Ollama'yı durdur
+    app.on('before-quit', () => {
+      console.log('🛑 Uygulama kapanıyor, Ollama durduruluyor...');
+      stopOllamaServer();
+    });
+    
+    // GPU bellek monitörünü başlat (eğer GPU varsa)
+    if (gpuAvailable && shouldUseGPU) {
+      const monitorInterval = 30000; // 30 saniye
+      const warningThreshold = 6000; // 6GB
+      const autoCleanup = true; // Otomatik temizleme aktif
+      
+      startGPUMemoryMonitor(monitorInterval, warningThreshold, autoCleanup);
+      console.log('✅ GPU memory monitor started (auto-cleanup enabled)');
+    }
+    
+    // Warmup (eğer aktifse ve Ollama çalışıyorsa)
+    const shouldWarmup = process.env.GPU_WARMUP === 'true';
+    if (shouldWarmup && ollamaStatus.running) {
+      const { LlamaClient } = await import('./ai/llamaClient');
+      const llamaClient = new LlamaClient();
+      
+      const isLlamaReady = await llamaClient.healthCheck();
+      if (isLlamaReady) {
+        console.log('🤖 Warming up Ollama model...');
+        await llamaClient.generate({
+          instructions: 'Merhaba',
+          context: '',
+          maxTokens: 10,
+          temperature: 0.25,
+        });
+        console.log('✅ Ollama warmup complete');
+      } else {
+        console.warn('⚠️ Ollama warmup failed');
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ GPU/AI initialization failed:', error instanceof Error ? error.message : 'Unknown error');
+    // Continue without GPU/warmup
   }
   
   createMainWindow();

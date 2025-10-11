@@ -8,6 +8,7 @@
 import { ipcMain } from 'electron';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import Store from 'electron-store';
 import { 
   initializeSupabase, 
   checkModelServerHealth, 
@@ -24,6 +25,10 @@ import { DOCXAnalysisService } from './services/DOCXAnalysisService';
 import { ExcelAnalysisService } from './services/ExcelAnalysisService';
 import { PowerPointAnalysisService } from './services/PowerPointAnalysisService';
 import { GroupAnalysisService } from './services/GroupAnalysisService';
+import { DocumentIngestPipeline } from './ai/documentIngestPipeline';
+import { RawDocument } from './ai/documentNormalizer';
+import { LocalRetrievalClient } from './ai/localRetrievalClient';
+import { DocumentMigrator } from './ai/documentMigrator';
 
 // Global token storage reference
 let tokenStorage: any = null;
@@ -36,6 +41,9 @@ let docxAnalysisService: DOCXAnalysisService | null = null;
 let excelAnalysisService: ExcelAnalysisService | null = null;
 let powerpointAnalysisService: PowerPointAnalysisService | null = null;
 let groupAnalysisService: GroupAnalysisService | null = null;
+let documentIngestPipeline: DocumentIngestPipeline | null = null;
+let localRetrievalClient: LocalRetrievalClient | null = null;
+let documentMigrator: DocumentMigrator | null = null;
 
 /**
  * Initialize Supabase connection
@@ -453,10 +461,75 @@ ipcMain.handle('pdf:analyzePDFBuffer', async (event, buffer: Uint8Array, filenam
       pdfAnalysisService = new PDFAnalysisService();
     }
 
+    // Initialize DocumentIngestPipeline
+    if (!documentIngestPipeline) {
+      documentIngestPipeline = new DocumentIngestPipeline();
+    }
+    if (!localRetrievalClient) {
+      localRetrievalClient = new LocalRetrievalClient();
+    }
+
     // Convert Uint8Array to Buffer
     const pdfBuffer = Buffer.from(buffer);
     
     const result = await pdfAnalysisService.analyzePDF(pdfBuffer, filename, options);
+    
+    // ✅ NEW: Semantic classification and normalization
+    if (result.success && result.textSections) {
+      console.log('🔍 Starting semantic classification for:', filename);
+      
+      // Extract full text content
+      const fullContent = result.textSections.map((s: any) => s.content).join('\n\n');
+      
+      // Create raw document for pipeline
+      const rawDoc: RawDocument = {
+        id: result.documentId || `pdf_${Date.now()}`,
+        filename: filename,
+        filePath: filename,
+        content: fullContent,
+        buffer: pdfBuffer, // 🆕 Pass buffer (for future PDF table extraction)
+        metadata: {
+          title: result.title,
+          sectionCount: result.textSections.length,
+          pageCount: result.pageCount,
+          fileType: 'pdf',
+        },
+      };
+
+      try {
+        console.log('📋 Running OPTIMIZED ingest pipeline (fast mode)...');
+        // Run through ingest pipeline - AI summary DISABLED for speed
+        const ingestResult = await documentIngestPipeline.ingest(rawDoc, {
+          generateSummary: true,        // source_sample generation (fast, no LLM)
+          generateAISummary: false,     // 🔥 DISABLED for fast upload (use "özetle" command instead)
+          extractTables: false,         // PDF table extraction not yet supported (future feature)
+          skipEmbedding: false,         // BGE-M3 embeddings
+          skipValidation: false,        // Validate canonical schema
+          autoReview: true,             // Auto flag low-confidence documents
+        });
+
+        if (ingestResult.success && ingestResult.document) {
+          console.log('✅ Document classified and normalized:');
+          console.log('   📄 Type:', ingestResult.document.type);
+          console.log('   📊 Confidence:', ingestResult.document.confidence.classification.toFixed(2));
+          console.log('   ⚠️ Needs review:', ingestResult.needsReview);
+          
+          // Store normalized document
+          await localRetrievalClient.storeNormalizedDocument(ingestResult.document);
+          
+          // Add classification info to result
+          (result as any).classification = {
+            type: ingestResult.document.type,
+            confidence: ingestResult.document.confidence.classification,
+            method: 'hybrid',
+            needsReview: ingestResult.needsReview,
+            normalizedDocument: ingestResult.document,
+          };
+        }
+      } catch (classifyError) {
+        console.warn('⚠️ Classification failed, continuing with analysis:', classifyError);
+      }
+    }
     
     return {
       success: result.success,
@@ -467,7 +540,8 @@ ipcMain.handle('pdf:analyzePDFBuffer', async (event, buffer: Uint8Array, filenam
       textSections: result.textSections,
       aiCommentary: result.aiCommentary,
       processingTime: result.processingTime,
-      error: result.error
+      error: result.error,
+      classification: (result as any).classification,
     };
   } catch (error) {
     console.error('Failed to analyze PDF buffer:', error);
@@ -836,10 +910,74 @@ ipcMain.handle('docx:analyzeDOCXBuffer', async (event, buffer: Uint8Array, filen
       docxAnalysisService = new DOCXAnalysisService();
     }
 
+    // Initialize DocumentIngestPipeline
+    if (!documentIngestPipeline) {
+      documentIngestPipeline = new DocumentIngestPipeline();
+    }
+    if (!localRetrievalClient) {
+      localRetrievalClient = new LocalRetrievalClient();
+    }
+
     // Convert Uint8Array to Buffer
     const docxBuffer = Buffer.from(buffer);
 
     const result = await docxAnalysisService.analyzeDOCX(docxBuffer, filename, options);
+
+    // ✅ NEW: Semantic classification and normalization
+    if (result.success && result.textSections) {
+      console.log('🔍 Starting semantic classification for:', filename);
+      
+      // Extract full text content
+      const fullContent = result.textSections.map((s: any) => s.content).join('\n\n');
+      
+      // Create raw document for pipeline
+      const rawDoc: RawDocument = {
+        id: result.documentId || `docx_${Date.now()}`,
+        filename: filename,
+        filePath: filename,
+        content: fullContent,
+        buffer: docxBuffer, // 🆕 Pass buffer for table extraction
+        metadata: {
+          title: result.title,
+          sectionCount: result.textSections.length,
+          fileType: 'docx',
+        },
+      };
+
+      try {
+        console.log('📋 Running OPTIMIZED ingest pipeline (fast mode)...');
+        // Run through ingest pipeline - AI summary DISABLED for speed
+        const ingestResult = await documentIngestPipeline.ingest(rawDoc, {
+          generateSummary: true,        // source_sample generation (fast, no LLM)
+          generateAISummary: false,     // 🔥 DISABLED for fast upload (use "özetle" command instead)
+          extractTables: true,          // 🆕 Table extraction for line_items
+          skipEmbedding: false,         // BGE-M3 embeddings
+          skipValidation: false,        // Validate canonical schema
+          autoReview: true,             // Auto flag low-confidence documents
+        });
+
+        if (ingestResult.success && ingestResult.document) {
+          console.log('✅ Document classified and normalized:');
+          console.log('   📄 Type:', ingestResult.document.type);
+          console.log('   📊 Confidence:', ingestResult.document.confidence.classification.toFixed(2));
+          console.log('   ⚠️ Needs review:', ingestResult.needsReview);
+          
+          // Store normalized document
+          await localRetrievalClient.storeNormalizedDocument(ingestResult.document);
+          
+          // Add classification info to result
+          (result as any).classification = {
+            type: ingestResult.document.type,
+            confidence: ingestResult.document.confidence.classification,
+            method: 'hybrid',
+            needsReview: ingestResult.needsReview,
+            normalizedDocument: ingestResult.document,
+          };
+        }
+      } catch (classifyError) {
+        console.warn('⚠️ Classification failed, continuing with analysis:', classifyError);
+      }
+    }
 
     return {
       success: result.success,
@@ -896,10 +1034,75 @@ ipcMain.handle('excel:analyzeExcelBuffer', async (event, buffer: Uint8Array, fil
       excelAnalysisService = new ExcelAnalysisService();
     }
 
+    // Initialize DocumentIngestPipeline
+    if (!documentIngestPipeline) {
+      documentIngestPipeline = new DocumentIngestPipeline();
+    }
+    if (!localRetrievalClient) {
+      localRetrievalClient = new LocalRetrievalClient();
+    }
+
     // Convert Uint8Array to Buffer
     const excelBuffer = Buffer.from(buffer);
 
     const result = await excelAnalysisService.analyzeExcel(excelBuffer, filename, options);
+
+    // ✅ NEW: Semantic classification and normalization
+    if (result.success && result.textSections) {
+      console.log('🔍 Starting semantic classification for:', filename);
+      
+      // Extract full text content
+      const fullContent = result.textSections.map((s: any) => s.content).join('\n\n');
+      
+      // Create raw document for pipeline
+      const rawDoc: RawDocument = {
+        id: result.documentId || `excel_${Date.now()}`,
+        filename: filename,
+        filePath: filename,
+        content: fullContent,
+        buffer: excelBuffer, // 🆕 Pass buffer for table extraction
+        metadata: {
+          title: result.title,
+          sectionCount: result.textSections.length,
+          sheetCount: result.sheetCount,
+          fileType: 'xlsx',
+        },
+      };
+
+      try {
+        console.log('📋 Running OPTIMIZED ingest pipeline (fast mode)...');
+        // Run through ingest pipeline - AI summary DISABLED for speed
+        const ingestResult = await documentIngestPipeline.ingest(rawDoc, {
+          generateSummary: true,        // source_sample generation (fast, no LLM)
+          generateAISummary: false,     // 🔥 DISABLED for fast upload (use "özetle" command instead)
+          extractTables: true,          // 🆕 Table extraction for line_items (Excel is perfect for this!)
+          skipEmbedding: false,         // BGE-M3 embeddings
+          skipValidation: false,        // Validate canonical schema
+          autoReview: true,             // Auto flag low-confidence documents
+        });
+
+        if (ingestResult.success && ingestResult.document) {
+          console.log('✅ Document classified and normalized:');
+          console.log('   📄 Type:', ingestResult.document.type);
+          console.log('   📊 Confidence:', ingestResult.document.confidence.classification.toFixed(2));
+          console.log('   ⚠️ Needs review:', ingestResult.needsReview);
+          
+          // Store normalized document
+          await localRetrievalClient.storeNormalizedDocument(ingestResult.document);
+          
+          // Add classification info to result
+          (result as any).classification = {
+            type: ingestResult.document.type,
+            confidence: ingestResult.document.confidence.classification,
+            method: 'hybrid',
+            needsReview: ingestResult.needsReview,
+            normalizedDocument: ingestResult.document,
+          };
+        }
+      } catch (classifyError) {
+        console.warn('⚠️ Classification failed, continuing with analysis:', classifyError);
+      }
+    }
 
     return {
       success: result.success,
@@ -910,7 +1113,8 @@ ipcMain.handle('excel:analyzeExcelBuffer', async (event, buffer: Uint8Array, fil
       textSections: result.textSections,
       aiCommentary: result.aiCommentary,
       processingTime: result.processingTime,
-      error: result.error
+      error: result.error,
+      classification: (result as any).classification,
     };
   } catch (error) {
     console.error('Failed to analyze Excel buffer:', error);
@@ -1545,6 +1749,58 @@ ipcMain.handle('supabase:fetchProjects', async () => {
 });
 
 // Debug: List all registered handlers
+/**
+ * Document Migration IPC Handlers
+ * For migrating existing documents to normalized schema
+ */
+
+// Migrate all stored documents
+ipcMain.handle('migration:migrateAllDocuments', async () => {
+  try {
+    if (!documentMigrator) {
+      documentMigrator = new DocumentMigrator();
+    }
+
+    const result = await documentMigrator.migrateStoredDocuments();
+    
+    return {
+      success: true,
+      result,
+      message: `Migrated ${result.migrated} documents, ${result.skipped} skipped, ${result.failed} failed`,
+    };
+  } catch (error) {
+    console.error('Migration failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Migration failed',
+    };
+  }
+});
+
+// Get migration status
+ipcMain.handle('migration:getStatus', async () => {
+  try {
+    if (!documentMigrator) {
+      documentMigrator = new DocumentMigrator();
+    }
+
+    const status = documentMigrator.getMigrationStatus();
+    
+    return {
+      success: true,
+      status,
+    };
+  } catch (error) {
+    console.error('Failed to get migration status:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get status',
+    };
+  }
+});
+
+console.log('Document Migration IPC handlers registered');
+
 console.log('Registered IPC handlers:');
 console.log('- pdf:initializeService');
 console.log('- pdf:analyzePDF');
@@ -1559,6 +1815,8 @@ console.log('- excel:initializeService');
 console.log('- excel:analyzeExcelBuffer');
 console.log('- powerpoint:initializeService');
 console.log('- powerpoint:analyzePowerPointBuffer');
+console.log('- migration:migrateAllDocuments');
+console.log('- migration:getStatus');
 
 // Initialize token storage
 const initializeTokenStorage = async () => {
@@ -1679,7 +1937,7 @@ const handlers = ipcMain.listenerCount('group:initializeGroupAnalysisService');
 console.log(`📊 Handler count for group:initializeGroupAnalysisService: ${handlers}`);
 
 // ============================================================================
-// AI Chat Query Handlers (Mistral RAG Pipeline)
+// AI Chat Query Handlers (Llama 3.2 Chat)
 // ============================================================================
 
 import { ChatController } from './ai/chatController';
@@ -1694,11 +1952,10 @@ let localStorageMigrator: LocalStorageMigrator | null = null;
 ipcMain.handle('ai:initializeChatController', async () => {
   try {
     if (!chatController) {
-      chatController = new ChatController(true); // Enable local storage
-      console.log('ChatController initialized successfully with local storage');
+      chatController = new ChatController();
+      console.log('ChatController initialized successfully');
     }
     
-    // Perform health check
     const health = await chatController.healthCheck();
     
     return {
@@ -1707,7 +1964,6 @@ ipcMain.handle('ai:initializeChatController', async () => {
       health,
     };
   } catch (error) {
-    console.error('Failed to initialize chat controller:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -1715,183 +1971,41 @@ ipcMain.handle('ai:initializeChatController', async () => {
   }
 });
 
-/**
- * Add document to local storage for retrieval
- */
-ipcMain.handle('ai:addDocumentToLocalStorage', async (event, request: {
-  documentId: string;
-  filename: string;
-  content: string;
-  metadata?: any;
-}) => {
-  try {
-    console.log(`Adding document to local storage: ${request.filename}`);
-    
-    // Initialize chat controller if needed
-    if (!chatController) {
-      chatController = new ChatController(true);
-    }
-    
-    await chatController.addDocumentToLocalStorage(
-      request.documentId,
-      request.filename,
-      request.content,
-      request.metadata
-    );
-    
-    return {
-      success: true,
-      message: 'Document added to local storage successfully',
-    };
-  } catch (error) {
-    console.error('Failed to add document to local storage:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
-});
 
 /**
- * Get stored documents from local storage
- */
-ipcMain.handle('ai:getStoredDocuments', async () => {
-  try {
-    if (!chatController) {
-      chatController = new ChatController(true);
-    }
-    
-    const documents = chatController.getStoredDocuments();
-    
-    return {
-      success: true,
-      documents,
-    };
-  } catch (error) {
-    console.error('Failed to get stored documents:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      documents: [],
-    };
-  }
-});
-
-/**
- * Clear all stored documents from local storage
- */
-ipcMain.handle('ai:clearStoredDocuments', async () => {
-  try {
-    if (!chatController) {
-      chatController = new ChatController(true);
-    }
-    
-    chatController.clearStoredDocuments();
-    
-    return {
-      success: true,
-      message: 'All stored documents cleared',
-    };
-  } catch (error) {
-    console.error('Failed to clear stored documents:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
-});
-
-/**
- * Migrate existing local storage data to ChatBot system
+ * (Removed - no longer needed for pure chat)
  */
 ipcMain.handle('ai:migrateExistingData', async () => {
-  try {
-    if (!localStorageMigrator) {
-      localStorageMigrator = new LocalStorageMigrator();
-    }
-    
-    // Try direct JSON migration first
-    const directResult = await localStorageMigrator.migrateFromKnownJSON();
-    if (directResult.success && directResult.migratedCount > 0) {
-      return {
-        success: true,
-        migratedCount: directResult.migratedCount,
-        errors: directResult.errors,
-        message: `Migrated ${directResult.migratedCount} documents from JSON successfully`,
-      };
-    }
-    
-    // Fallback to regular migration
-    const result = await localStorageMigrator.migrateExistingData();
-    
-    return {
-      success: result.success,
-      migratedCount: result.migratedCount,
-      errors: result.errors,
-      message: `Migrated ${result.migratedCount} documents successfully`,
-    };
-  } catch (error) {
-    console.error('Failed to migrate existing data:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      migratedCount: 0,
-      errors: [error instanceof Error ? error.message : 'Unknown error'],
-    };
-  }
+  return {
+    success: true,
+    migratedCount: 0,
+    errors: [],
+    message: 'Migration not needed for pure chat',
+  };
 });
 
 /**
  * Get migration status
  */
 ipcMain.handle('ai:getMigrationStatus', async () => {
-  try {
-    if (!localStorageMigrator) {
-      localStorageMigrator = new LocalStorageMigrator();
-    }
-    
-    const status = await localStorageMigrator.getMigrationStatus();
-    
-    return {
-      success: true,
-      status,
-    };
-  } catch (error) {
-    console.error('Failed to get migration status:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      status: {
-        totalConversions: 0,
-        migratedDocuments: 0,
-        needsMigration: false,
-      },
-    };
-  }
+  return {
+    success: true,
+    status: {
+      totalConversions: 0,
+      migratedDocuments: 0,
+      needsMigration: false,
+    },
+  };
 });
 
 /**
  * Clear migrated data
  */
 ipcMain.handle('ai:clearMigratedData', async () => {
-  try {
-    if (!localStorageMigrator) {
-      localStorageMigrator = new LocalStorageMigrator();
-    }
-    
-    localStorageMigrator.clearMigratedData();
-    
-    return {
-      success: true,
-      message: 'All migrated data cleared',
-    };
-  } catch (error) {
-    console.error('Failed to clear migrated data:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
+  return {
+    success: true,
+    message: 'No data to clear',
+  };
 });
 
 /**
@@ -1899,82 +2013,53 @@ ipcMain.handle('ai:clearMigratedData', async () => {
  */
 ipcMain.handle('ai:chatQuery', async (event, request: { 
   userId: string; 
-  query: string; 
-  options?: any;
+  query: string;
 }) => {
   try {
-    console.log(`AI Chat Query received: "${request.query}"`);
-    
-    // Lazy initialize controller if needed (use local storage by default)
     if (!chatController) {
-      chatController = new ChatController(true);
-      console.log('ChatController lazy-initialized with local storage enabled');
+      chatController = new ChatController();
     }
     
-    // Debug: Check how many documents are stored
-    const storedDocs = chatController.getStoredDocuments();
-    console.log(`ChatController: Found ${storedDocs.length} documents in local storage`);
-    
-    // Process the query
     const response = await chatController.handleChatQuery(request);
-    
-    console.log(`AI Chat Query completed: success=${response.success}`);
     return response;
   } catch (error) {
-    console.error('AI Chat Query failed:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 });
 
 /**
- * Handle deep analysis chat query with critic verification
+ * Handle document-aware chat query
  */
-ipcMain.handle('ai:chatQueryDeep', async (event, request: { 
-  userId: string; 
-  query: string; 
-  options?: any;
-  config?: {
-    enableCritic?: boolean;
-    criticModel?: 'mistral' | 'local';
-    escalateModel?: string;
-    timeout?: number;
-    criticTimeout?: number;
+ipcMain.handle('ai:documentChatQuery', async (event, request: {
+  userId: string;
+  query: string;
+  localDocs: any[];
+  options?: {
+    compute?: boolean;
+    showRaw?: boolean;
+    maxRefs?: number;
+    locale?: string;
   };
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }) => {
   try {
-    console.log(`AI Deep Analysis Query received: "${request.query}"`);
-    console.log(`Deep Analysis Config:`, request.config);
-    
-    // Lazy initialize controller if needed (use local storage by default)
     if (!chatController) {
-      chatController = new ChatController(true);
-      console.log('ChatController lazy-initialized with local storage enabled');
+      chatController = new ChatController();
     }
     
-    // Debug: Check how many documents are stored
-    const storedDocs = chatController.getStoredDocuments();
-    console.log(`ChatController: Found ${storedDocs.length} documents in local storage`);
-    
-    // Process the query with deep analysis
-    const response = await chatController.chatQueryDeep(request, request.config || {});
-    
-    console.log(`AI Deep Analysis Query completed: success=${response.success}`);
-    if (response.payload?.modelMeta?.criticVerified !== undefined) {
-      console.log(`Critic verified: ${response.payload.modelMeta.criticVerified}`);
-    }
-    
+    const response = await chatController.handleDocumentChatQuery(request);
     return response;
   } catch (error) {
-    console.error('AI Deep Analysis Query failed:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 });
+
 
 /**
  * Check AI services health
@@ -1982,7 +2067,7 @@ ipcMain.handle('ai:chatQueryDeep', async (event, request: {
 ipcMain.handle('ai:healthCheck', async () => {
   try {
     if (!chatController) {
-      chatController = new ChatController(true);
+      chatController = new ChatController();
     }
     
     const health = await chatController.healthCheck();
@@ -1990,10 +2075,9 @@ ipcMain.handle('ai:healthCheck', async () => {
     return {
       success: true,
       health,
-      allHealthy: health.embed && health.retrieval && health.mistral,
+      allHealthy: health.llama,
     };
   } catch (error) {
-    console.error('AI health check failed:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Health check failed',
@@ -2004,78 +2088,734 @@ ipcMain.handle('ai:healthCheck', async () => {
 /**
  * DEBUG: Test retrieval directly
  */
-ipcMain.handle('ai:debugRetrieval', async () => {
-  try {
-    console.log('\n' + '='.repeat(80));
-    console.log('🔍 DEBUG RETRIEVAL TEST STARTING');
-    console.log('='.repeat(80));
-    
-    if (!chatController) {
-      chatController = new ChatController(true);
-      console.log('Created new ChatController with local storage');
-    }
-    
-    // Get stored documents
-    const docs = chatController.getStoredDocuments();
-    console.log(`Found ${docs.length} documents in storage`);
-    docs.forEach((doc: any, i: number) => {
-      console.log(`  ${i + 1}. ${doc.filename} (${doc.content?.length || 0} chars, ${doc.chunks?.length || 0} chunks)`);
-    });
-    
-    if (docs.length === 0) {
-      return {
-        success: false,
-        error: 'No documents in storage',
-        documents: [],
-        retrievalResults: []
-      };
-    }
-    
-    // Generate a simple query embedding (mock for now)
-    const { EmbedClient } = await import('./ai/embedClient');
-    const embedClient = new EmbedClient();
-    
-    console.log('\nGenerating query embedding for: "test"');
-    const queryEmbedding = await embedClient.embedQuery('test');
-    console.log(`Query embedding generated: ${queryEmbedding.length} dimensions`);
-    
-    // Try retrieval
-    const { LocalRetrievalClient } = await import('./ai/localRetrievalClient');
-    const localRetrieval = new LocalRetrievalClient();
-    
-    console.log('\nAttempting retrieval...');
-    const results = await localRetrieval.retrieve(queryEmbedding, { topK: 10, threshold: 0.01 });
-    
-    console.log(`\n✅ Retrieval complete: Found ${results.length} results`);
-    results.forEach((r: any, i: number) => {
-      console.log(`  ${i + 1}. ${r.filename} (similarity: ${r.similarity.toFixed(4)})`);
-    });
-    
-    console.log('='.repeat(80) + '\n');
-    
-    return {
-      success: true,
-      documents: docs,
-      queryEmbeddingLength: queryEmbedding.length,
-      retrievalResults: results.map((r: any) => ({
-        filename: r.filename,
-        similarity: r.similarity,
-        contentPreview: r.content.substring(0, 100)
-      }))
-    };
-    
-  } catch (error) {
-    console.error('❌ Debug retrieval failed:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    };
-  }
-});
 
 console.log('AI Chat IPC handlers registered:');
 console.log('- ai:initializeChatController');
 console.log('- ai:chatQuery');
-console.log('- ai:chatQueryDeep');
+console.log('- ai:documentChatQuery');
 console.log('- ai:healthCheck');
+
+/**
+ * GPU Control Handlers
+ */
+
+/**
+ * Check GPU status
+ */
+ipcMain.handle('check-gpu-status', async () => {
+  try {
+    const { getGPUInfo } = await import('./utils/gpuHelper');
+    const gpuInfo = await getGPUInfo();
+    
+    return {
+      available: gpuInfo.available,
+      name: gpuInfo.name,
+      memoryTotal: gpuInfo.memoryTotal,
+      memoryUsed: gpuInfo.memoryUsed,
+      memoryFree: gpuInfo.memoryFree,
+    };
+  } catch (error) {
+    console.error('GPU check failed:', error);
+    return {
+      available: false,
+      name: 'GPU kontrolü başarısız',
+    };
+  }
+});
+
+/**
+ * Set GPU mode (enable/disable)
+ */
+ipcMain.handle('set-gpu-mode', async (event, { enabled }: { enabled: boolean }) => {
+  try {
+    const { configureOllamaGPU } = await import('./utils/gpuHelper');
+    
+    configureOllamaGPU(enabled);
+    
+    console.log(`🎮 GPU mode ${enabled ? 'enabled' : 'disabled'}`);
+    
+    return {
+      success: true,
+      gpuEnabled: enabled,
+      message: enabled ? 'GPU modu etkinleştirildi' : 'CPU modu etkinleştirildi',
+    };
+  } catch (error) {
+    console.error('Failed to set GPU mode:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'GPU ayarı değiştirilemedi',
+    };
+  }
+});
+
+/**
+ * Get GPU memory usage
+ */
+ipcMain.handle('get-gpu-memory', async () => {
+  try {
+    const { checkGPUMemory } = await import('./utils/gpuHelper');
+    const memoryUsed = await checkGPUMemory();
+    
+    return {
+      success: true,
+      memoryUsed,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'GPU bellek kontrolü başarısız',
+    };
+  }
+});
+
+/**
+ * Cleanup GPU memory (unload models)
+ */
+ipcMain.handle('cleanup-gpu-memory', async () => {
+  try {
+    const { cleanupGPUMemory } = await import('./utils/gpuHelper');
+    const result = await cleanupGPUMemory();
+    
+    if (result.success) {
+      console.log(`✅ GPU cleanup successful, freed ${result.freedMemoryMB}MB`);
+      return {
+        success: true,
+        freedMemoryMB: result.freedMemoryMB,
+        message: `GPU belleği temizlendi (${result.freedMemoryMB}MB serbest bırakıldı)`,
+      };
+    } else {
+      return {
+        success: false,
+        error: result.error,
+      };
+    }
+  } catch (error) {
+    console.error('Failed to cleanup GPU memory:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'GPU temizliği başarısız',
+    };
+  }
+});
+
+/**
+ * Check and cleanup if memory threshold exceeded
+ */
+ipcMain.handle('check-and-cleanup-gpu', async (event, { thresholdMB }: { thresholdMB?: number }) => {
+  try {
+    const { checkAndCleanupIfNeeded } = await import('./utils/gpuHelper');
+    const result = await checkAndCleanupIfNeeded(thresholdMB);
+    
+    return {
+      success: true,
+      cleaned: result.cleaned,
+      memoryUsed: result.memoryUsed,
+      memoryFree: result.memoryFree,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'GPU kontrolü başarısız',
+    };
+  }
+});
+
+console.log('GPU Control IPC handlers registered:');
+console.log('- check-gpu-status');
+console.log('- set-gpu-mode');
+console.log('- get-gpu-memory');
+console.log('- cleanup-gpu-memory');
+console.log('- check-and-cleanup-gpu');
+
+/**
+ * ===============================================
+ * PERSISTENT LOCAL STORAGE IPC HANDLERS
+ * ===============================================
+ * Prevents data loss on PC restart by using electron-store
+ */
+
+import { PersistentLocalStorage, AIData } from './services/PersistentLocalStorage';
+
+// Global persistent storage instance
+let persistentStorage: PersistentLocalStorage | null = null;
+
+function getPersistentStorage(): PersistentLocalStorage {
+  if (!persistentStorage) {
+    persistentStorage = new PersistentLocalStorage();
+  }
+  return persistentStorage;
+}
+
+/**
+ * Check if persistent local storage is enabled
+ */
+ipcMain.handle('persistent-storage:is-enabled', async () => {
+  try {
+    const storage = getPersistentStorage();
+    return {
+      success: true,
+      enabled: storage.isEnabled()
+    };
+  } catch (error) {
+    console.error('Failed to check persistent storage status:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      enabled: false
+    };
+  }
+});
+
+/**
+ * Enable or disable persistent local storage
+ */
+ipcMain.handle('persistent-storage:set-enabled', async (event, enabled: boolean) => {
+  try {
+    const storage = getPersistentStorage();
+    storage.setEnabled(enabled);
+    return {
+      success: true,
+      enabled: storage.isEnabled()
+    };
+  } catch (error) {
+    console.error('Failed to set persistent storage status:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Save AI data to persistent storage
+ */
+ipcMain.handle('persistent-storage:save-data', async (event, data: AIData) => {
+  try {
+    const storage = getPersistentStorage();
+    const result = storage.saveData(data);
+    return result;
+  } catch (error) {
+    console.error('Failed to save data to persistent storage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Get AI data from persistent storage
+ */
+ipcMain.handle('persistent-storage:get-data', async (event, id: string) => {
+  try {
+    const storage = getPersistentStorage();
+    const data = storage.getData(id);
+    return {
+      success: true,
+      data
+    };
+  } catch (error) {
+    console.error('Failed to get data from persistent storage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      data: null
+    };
+  }
+});
+
+/**
+ * Get all AI data from persistent storage
+ */
+ipcMain.handle('persistent-storage:get-all-data', async () => {
+  try {
+    const storage = getPersistentStorage();
+    const data = storage.getAllData();
+    return {
+      success: true,
+      data
+    };
+  } catch (error) {
+    console.error('Failed to get all data from persistent storage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      data: []
+    };
+  }
+});
+
+/**
+ * Get AI data by type from persistent storage
+ */
+ipcMain.handle('persistent-storage:get-data-by-type', async (event, type: AIData['type']) => {
+  try {
+    const storage = getPersistentStorage();
+    const data = storage.getDataByType(type);
+    return {
+      success: true,
+      data
+    };
+  } catch (error) {
+    console.error('Failed to get data by type from persistent storage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      data: []
+    };
+  }
+});
+
+/**
+ * Get AI data by file path from persistent storage
+ */
+ipcMain.handle('persistent-storage:get-data-by-file-path', async (event, filePath: string) => {
+  try {
+    const storage = getPersistentStorage();
+    const data = storage.getDataByFilePath(filePath);
+    return {
+      success: true,
+      data
+    };
+  } catch (error) {
+    console.error('Failed to get data by file path from persistent storage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      data: []
+    };
+  }
+});
+
+/**
+ * Search AI data in persistent storage
+ */
+ipcMain.handle('persistent-storage:search-data', async (event, query: string) => {
+  try {
+    const storage = getPersistentStorage();
+    const data = storage.searchData(query);
+    return {
+      success: true,
+      data
+    };
+  } catch (error) {
+    console.error('Failed to search data in persistent storage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      data: []
+    };
+  }
+});
+
+/**
+ * Delete AI data from persistent storage
+ */
+ipcMain.handle('persistent-storage:delete-data', async (event, id: string) => {
+  try {
+    const storage = getPersistentStorage();
+    const result = storage.deleteData(id);
+    return result;
+  } catch (error) {
+    console.error('Failed to delete data from persistent storage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Clear all AI data from persistent storage
+ */
+ipcMain.handle('persistent-storage:clear-all-data', async () => {
+  try {
+    const storage = getPersistentStorage();
+    const result = storage.clearAllData();
+    return result;
+  } catch (error) {
+    console.error('Failed to clear all data from persistent storage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Get storage statistics
+ */
+ipcMain.handle('persistent-storage:get-stats', async () => {
+  try {
+    const storage = getPersistentStorage();
+    const stats = storage.getStats();
+    return {
+      success: true,
+      stats
+    };
+  } catch (error) {
+    console.error('Failed to get storage stats:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stats: {
+        totalItems: 0,
+        totalSize: 0,
+        lastUpdated: '',
+        itemsByType: {}
+      }
+    };
+  }
+});
+
+/**
+ * Export all AI data as JSON
+ */
+ipcMain.handle('persistent-storage:export-data', async () => {
+  try {
+    const storage = getPersistentStorage();
+    const result = storage.exportData();
+    return result;
+  } catch (error) {
+    console.error('Failed to export data from persistent storage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Import AI data from JSON
+ */
+ipcMain.handle('persistent-storage:import-data', async (event, jsonData: string) => {
+  try {
+    const storage = getPersistentStorage();
+    const result = storage.importData(jsonData);
+    return {
+      success: result.success,
+      imported: result.imported,
+      errors: result.errors
+    };
+  } catch (error) {
+    console.error('Failed to import data to persistent storage:', error);
+    return {
+      success: false,
+      imported: 0,
+      errors: [error instanceof Error ? error.message : 'Unknown error']
+    };
+  }
+});
+
+/**
+ * Get storage path (for debugging)
+ */
+ipcMain.handle('persistent-storage:get-path', async () => {
+  try {
+    const storage = getPersistentStorage();
+    return {
+      success: true,
+      path: storage.getStorePath()
+    };
+  } catch (error) {
+    console.error('Failed to get storage path:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      path: ''
+    };
+  }
+});
+
+/**
+ * Get documents in LOCAL_DOCS format for AI chatbot
+ * Converts both PersistentLocalStorage and LocalDataService data to the format expected by documentRetriever
+ */
+ipcMain.handle('persistent-storage:get-local-docs', async () => {
+  try {
+    const storage = getPersistentStorage();
+    const allData = storage.getAllData();
+    
+    console.log(`📦 PersistentLocalStorage: ${allData.length} items found`);
+    
+    // Also get data from LocalDataService (document-converter-data store)
+    const converterStore = new Store({ name: 'document-converter-data' });
+    const conversionHistory = converterStore.get('conversions', []) as any[];
+    
+    console.log(`📦 LocalDataService: ${conversionHistory.length} conversions found`);
+    
+    // Combine both sources
+    const allDocuments = [...allData];
+    
+    // Add conversion history if it contains text content
+    for (const conversion of conversionHistory) {
+      if (conversion.success && conversion.metadata?.extractedText) {
+        allDocuments.push({
+          id: conversion.id,
+          type: 'conversion',
+          content: {
+            extractedText: conversion.metadata.extractedText,
+            filename: conversion.inputFile,
+            title: conversion.inputFile,
+            fileType: conversion.inputFormat?.toUpperCase() || 'UNKNOWN'
+          },
+          metadata: {
+            timestamp: new Date(conversion.timestamp).toISOString(),
+            source: conversion.inputFile
+          }
+        });
+      }
+    }
+    
+    console.log(`📦 Combined: ${allDocuments.length} total items`);
+    
+    // Filter for conversion/extraction types that contain document content
+    const documentData = allDocuments.filter(item => 
+      item.type === 'conversion' || item.type === 'extraction' || item.type === 'analysis'
+    );
+    
+    console.log(`📄 Document items: ${documentData.length}`);
+    
+    // Transform to LOCAL_DOCS format
+    const localDocs = documentData.map(item => {
+      const content = item.content;
+      
+      // Extract textSections from various content formats
+      let textSections: any[] = [];
+      
+      if (content.textSections && Array.isArray(content.textSections)) {
+        // Already in correct format
+        textSections = content.textSections;
+      } else if (content.sections && Array.isArray(content.sections)) {
+        // Convert from sections format
+        textSections = content.sections.map((section: any, index: number) => ({
+          id: section.id || `${item.id}_section_${index}`,
+          content: section.content || section.text || '',
+          contentLength: (section.content || section.text || '').length
+        }));
+      } else if (content.extractedText) {
+        // Single text block - split into chunks
+        const text = content.extractedText;
+        const chunkSize = 2000;
+        const chunks: string[] = [];
+        
+        for (let i = 0; i < text.length; i += chunkSize) {
+          chunks.push(text.substring(i, i + chunkSize));
+        }
+        
+        textSections = chunks.map((chunk, index) => ({
+          id: `${item.id}_chunk_${index}`,
+          content: chunk,
+          contentLength: chunk.length
+        }));
+      } else if (content.text) {
+        // Single text field
+        textSections = [{
+          id: `${item.id}_text_0`,
+          content: content.text,
+          contentLength: content.text.length
+        }];
+      } else if (typeof content === 'string') {
+        // Content is a string
+        textSections = [{
+          id: `${item.id}_content_0`,
+          content: content,
+          contentLength: content.length
+        }];
+      }
+      
+      // Build document object
+      return {
+        documentId: item.id,
+        title: content.title || content.filename || item.metadata?.source || item.id,
+        filename: content.filename || item.metadata?.source || `document_${item.id}`,
+        fileType: content.fileType || item.metadata?.source?.split('.').pop()?.toUpperCase() || 'UNKNOWN',
+        textSections: textSections.filter(section => section.content && section.content.trim().length > 0)
+      };
+    }).filter(doc => doc.textSections.length > 0); // Only include docs with content
+    
+    console.log(`📚 Converted ${localDocs.length} documents to LOCAL_DOCS format`);
+    console.log(`📊 Total text sections: ${localDocs.reduce((acc, doc) => acc + doc.textSections.length, 0)}`);
+    
+    return {
+      success: true,
+      documents: localDocs,
+      count: localDocs.length
+    };
+  } catch (error) {
+    console.error('❌ Failed to get LOCAL_DOCS:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'N/A');
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      documents: [],
+      count: 0
+    };
+  }
+});
+
+/**
+ * DEBUG: Test localStorage and conversions directly
+ */
+ipcMain.handle('debug:check-storage', async () => {
+  try {
+    const storage = getPersistentStorage();
+    const allData = storage.getAllData();
+    
+    const converterStore = new Store({ name: 'document-converter-data' });
+    const conversionHistory = converterStore.get('conversions', []) as any[];
+    
+    const result = {
+      persistentStorage: {
+        count: allData.length,
+        items: allData.map(item => ({
+          id: item.id,
+          type: item.type,
+          hasContent: !!item.content,
+          contentKeys: item.content ? Object.keys(item.content) : [],
+          filename: item.content?.filename || item.metadata?.source || 'unknown'
+        }))
+      },
+      conversionHistory: {
+        count: conversionHistory.length,
+        items: conversionHistory.slice(0, 5).map(conv => ({
+          id: conv.id,
+          inputFile: conv.inputFile,
+          success: conv.success,
+          hasExtractedText: !!conv.metadata?.extractedText
+        }))
+      }
+    };
+    
+    console.log('🔍 DEBUG STORAGE CHECK:');
+    console.log(JSON.stringify(result, null, 2));
+    
+    return {
+      success: true,
+      data: result
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+console.log('✅ Persistent Local Storage IPC handlers registered:');
+console.log('- persistent-storage:is-enabled');
+console.log('- persistent-storage:set-enabled');
+console.log('- persistent-storage:save-data');
+console.log('- persistent-storage:get-data');
+console.log('- persistent-storage:get-all-data');
+console.log('- persistent-storage:get-data-by-type');
+console.log('- persistent-storage:get-data-by-file-path');
+console.log('- persistent-storage:search-data');
+console.log('- persistent-storage:delete-data');
+console.log('- persistent-storage:clear-all-data');
+console.log('- persistent-storage:get-stats');
+console.log('- persistent-storage:export-data');
+console.log('- persistent-storage:import-data');
+console.log('- persistent-storage:get-path');
+console.log('- persistent-storage:get-local-docs');
+console.log('- debug:check-storage');
+
+/**
+ * ============================================
+ * OLLAMA MANAGEMENT HANDLERS
+ * ============================================
+ */
+
+/**
+ * Check Ollama server status
+ */
+ipcMain.handle('ollama:status', async () => {
+  try {
+    const { getOllamaStatus } = await import('./utils/ollamaManager');
+    const status = await getOllamaStatus();
+    
+    return {
+      success: true,
+      status
+    };
+  } catch (error) {
+    console.error('Failed to get Ollama status:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Start Ollama server manually
+ */
+ipcMain.handle('ollama:start', async () => {
+  try {
+    const { startOllamaServer } = await import('./utils/ollamaManager');
+    const result = await startOllamaServer();
+    
+    return {
+      success: result.success,
+      gpuEnabled: result.gpuEnabled,
+      error: result.error
+    };
+  } catch (error) {
+    console.error('Failed to start Ollama:', error);
+    return {
+      success: false,
+      gpuEnabled: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Stop Ollama server
+ */
+ipcMain.handle('ollama:stop', async () => {
+  try {
+    const { stopOllamaServer } = await import('./utils/ollamaManager');
+    stopOllamaServer();
+    
+    return {
+      success: true
+    };
+  } catch (error) {
+    console.error('Failed to stop Ollama:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Ensure Ollama is running (check and auto-start if needed)
+ */
+ipcMain.handle('ollama:ensure-running', async () => {
+  try {
+    const { ensureOllamaRunning } = await import('./utils/ollamaManager');
+    const status = await ensureOllamaRunning();
+    
+    return {
+      success: status.running,
+      status,
+      error: status.error
+    };
+  } catch (error) {
+    console.error('Failed to ensure Ollama running:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+console.log('============================================');
+console.log('Ollama Management IPC Handlers:');
+console.log('- ollama:status');
+console.log('- ollama:start');
+console.log('- ollama:stop');
+console.log('- ollama:ensure-running');
+console.log('============================================');

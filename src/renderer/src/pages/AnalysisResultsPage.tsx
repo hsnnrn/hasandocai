@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -37,15 +37,42 @@ export function AnalysisResultsPage() {
   const [copiedText, setCopiedText] = useState<string | null>(null)
   const [isUploadingToSupabase, setIsUploadingToSupabase] = useState(false)
   const [isSavingToLocalStorage, setIsSavingToLocalStorage] = useState(false)
-  const [isLocalStorageEnabled, setIsLocalStorageEnabled] = useState(false)
 
   const documentId = searchParams.get('documentId')
+
+  // Otomatik kaydetme fonksiyonu
+  const saveAnalysisToLocalStorage = useCallback(async (result: any) => {
+    try {
+      const aiData: AIData = {
+        id: `analysis_${result.documentId || Date.now()}`,
+        type: 'analysis',
+        content: result,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: 'document-analysis',
+          model: 'BGE-M3'
+        },
+        filePath: result.filePath
+      }
+
+      const saveResult = await localStorageService.saveData(aiData)
+      
+      if (saveResult.success) {
+        console.log('✅ Analiz otomatik kaydedildi:', result.filename)
+      }
+    } catch (error) {
+      console.error('❌ Otomatik kaydetme hatası:', error)
+    }
+  }, [])
 
   useEffect(() => {
     if (documentId) {
       const result = getAnalysisResult(documentId)
       if (result) {
         setAnalysisResult(result)
+        
+        // ✅ OTOMATİK KAYDET - Kullanıcı butona basmadan kaydet
+        saveAnalysisToLocalStorage(result)
       } else {
         toast({
           title: 'Analiz Sonucu Bulunamadı',
@@ -59,9 +86,9 @@ export function AnalysisResultsPage() {
       navigate('/')
     }
 
-    // Check local storage status
-    setIsLocalStorageEnabled(localStorageService.isEnabled())
-  }, [documentId, getAnalysisResult, navigate])
+    // ✅ Local storage HER ZAMAN AKTİF - artık enable/disable yok
+    console.log('💾 Local storage her zaman aktif - veri kaybı olmaz!')
+  }, [documentId, getAnalysisResult, navigate, saveAnalysisToLocalStorage])
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -147,57 +174,34 @@ export function AnalysisResultsPage() {
     setIsSavingToLocalStorage(true)
     
     try {
-      if (!isLocalStorageEnabled) {
-        toast({
-          title: 'Local Storage Devre Dışı',
-          description: 'Local Storage özelliğini etkinleştirmek için Integrations > Local Storage bölümünden ayarları yapın.',
-          variant: 'destructive'
-        })
-        return
-      }
-
-      // Create AI data structure
+      // ✅ SADE VE BASİT: Tüm veriyi olduğu gibi kaydet
       const aiData: AIData = {
         id: `analysis_${analysisResult.documentId || Date.now()}`,
         type: 'analysis',
-        content: {
-          title: analysisResult.title,
-          filename: analysisResult.filename,
-          fileType: analysisResult.fileType,
-          textSections: analysisResult.textSections,
-          aiCommentary: analysisResult.aiCommentary,
-          processingTime: analysisResult.processingTime,
-          pageCount: analysisResult.pageCount,
-          sheetCount: analysisResult.sheetCount,
-          slideCount: analysisResult.slideCount,
-          createdAt: analysisResult.createdAt
-        },
+        content: analysisResult, // TÜM VERİ OLDUĞU GİBİ KAYDEDİLİYOR
         metadata: {
           timestamp: new Date().toISOString(),
-          source: 'document-analysis',
-          model: 'AI Analysis Engine',
-          version: '1.0'
+          source: 'document-analysis'
         },
-        filePath: analysisResult.filePath,
-        fileHash: analysisResult.fileHash
+        filePath: analysisResult.filePath
       }
 
-      // Save to local storage
-      const success = localStorageService.saveData(aiData)
+      // Direkt persistent storage'a kaydet
+      const saveResult = await localStorageService.saveData(aiData)
       
-      if (success) {
-        toast({
-          title: 'Local Storage Kaydı Başarılı',
-          description: `"${analysisResult.title}" başarıyla local storage'a kaydedildi. ${analysisResult.textSections?.length || 0} metin bölümü ve ${analysisResult.aiCommentary?.length || 0} AI yorumu saklandı.`,
-        })
-      } else {
-        throw new Error('Local storage save failed')
+      if (!saveResult.success) {
+        throw new Error(saveResult.error || 'Kaydetme başarısız')
       }
+
+      toast({
+        title: '💾 Kaydedildi',
+        description: 'Veri güvenle diske kaydedildi'
+      })
     } catch (error) {
-      console.error('Local storage save failed:', error)
+      console.error('❌ Kaydetme hatası:', error)
       toast({
         title: 'Kaydetme Hatası',
-        description: error instanceof Error ? error.message : 'Local storage\'a kaydetme sırasında bir hata oluştu.',
+        description: error instanceof Error ? error.message : 'Bilinmeyen hata',
         variant: 'destructive'
       })
     } finally {
@@ -343,7 +347,7 @@ export function AnalysisResultsPage() {
         <div className="flex items-center space-x-3">
           <Button
             onClick={saveToLocalStorage}
-            disabled={isSavingToLocalStorage || !isLocalStorageEnabled}
+            disabled={isSavingToLocalStorage}
             className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white"
           >
             {isSavingToLocalStorage ? (
@@ -352,7 +356,7 @@ export function AnalysisResultsPage() {
               <HardDrive className="h-4 w-4" />
             )}
             <span>
-              {isSavingToLocalStorage ? 'Kaydediliyor...' : 'Local Storage\'a Kaydet'}
+              {isSavingToLocalStorage ? 'Kaydediliyor...' : 'Diske Kaydet'}
             </span>
           </Button>
           

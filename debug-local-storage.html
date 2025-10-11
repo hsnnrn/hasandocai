@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Storage Debug - BGE M3 Verileri</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .stat-label {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .data-item {
+            padding: 15px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-bge {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .badge-analysis {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .badge-other {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .json-view {
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        .warning {
+            background: #fef3c7;
+            border: 1px solid #fcd34d;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .success {
+            background: #dcfce7;
+            border: 1px solid #86efac;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 Local Storage Debug Tool</h1>
+        <p>BGE M3 ve Analysis verilerini kontrol edin</p>
+        <button onclick="loadData()">🔄 Verileri Yeniden Yükle</button>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div id="alerts"></div>
+
+    <div class="section">
+        <h2>📊 BGE M3 Verileri</h2>
+        <div id="bge-data"></div>
+    </div>
+
+    <div class="section">
+        <h2>📄 Tüm Analysis Verileri</h2>
+        <div id="all-analysis"></div>
+    </div>
+
+    <div class="section">
+        <h2>🗂️ Tüm Veriler (Ham JSON)</h2>
+        <div id="raw-data"></div>
+    </div>
+
+    <script>
+        async function loadData() {
+            try {
+                // Get all data from persistent storage
+                const result = await window.electronAPI.persistentStorage.getAllData();
+                
+                console.log('📦 Storage data:', result);
+
+                if (!result.success || !result.data) {
+                    document.getElementById('alerts').innerHTML = `
+                        <div class="warning">
+                            ⚠️ Veri alınamadı: ${result.error || 'Bilinmeyen hata'}
+                        </div>
+                    `;
+                    return;
+                }
+
+                const allData = result.data;
+                
+                // Filter BGE-M3 data
+                const bgeData = allData.filter(item => 
+                    item.type === 'analysis' && 
+                    item.metadata?.model === 'BGE-M3' &&
+                    item.metadata?.source === 'document-analysis'
+                );
+
+                // Filter all analysis data
+                const analysisData = allData.filter(item => 
+                    item.type === 'analysis' && 
+                    item.content?.textSections
+                );
+
+                // Update stats
+                document.getElementById('stats').innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${allData.length}</div>
+                        <div class="stat-label">Toplam Veri</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${bgeData.length}</div>
+                        <div class="stat-label">BGE-M3 Verileri</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${analysisData.length}</div>
+                        <div class="stat-label">Analysis Verileri</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${analysisData.reduce((sum, item) => sum + (item.content?.textSections?.length || 0), 0)}</div>
+                        <div class="stat-label">Toplam Metin Bölümü</div>
+                    </div>
+                `;
+
+                // Show alert if no BGE data
+                if (bgeData.length === 0 && analysisData.length > 0) {
+                    document.getElementById('alerts').innerHTML = `
+                        <div class="warning">
+                            ⚠️ BGE-M3 metadata'sı olmayan ${analysisData.length} analysis verisi bulundu.<br>
+                            Chatbot bu verileri kullanacak ancak BGE-M3 olarak işaretlenmemiş.
+                        </div>
+                    `;
+                } else if (bgeData.length > 0) {
+                    document.getElementById('alerts').innerHTML = `
+                        <div class="success">
+                            ✅ ${bgeData.length} BGE-M3 verisi bulundu ve chatbot bunları kullanacak.
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('alerts').innerHTML = `
+                        <div class="warning">
+                            ⚠️ Hiç analysis verisi bulunamadı. Lütfen dokümanlarınızı analiz edin.
+                        </div>
+                    `;
+                }
+
+                // Render BGE data
+                document.getElementById('bge-data').innerHTML = bgeData.length > 0 
+                    ? bgeData.map(item => renderDataItem(item, true)).join('')
+                    : '<p style="color: #6b7280;">BGE-M3 verisi bulunamadı.</p>';
+
+                // Render all analysis data
+                document.getElementById('all-analysis').innerHTML = analysisData.length > 0
+                    ? analysisData.map(item => renderDataItem(item, false)).join('')
+                    : '<p style="color: #6b7280;">Analysis verisi bulunamadı.</p>';
+
+                // Render raw JSON
+                document.getElementById('raw-data').innerHTML = `
+                    <div class="json-view">${JSON.stringify(allData, null, 2)}</div>
+                `;
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('alerts').innerHTML = `
+                    <div class="warning">
+                        ❌ Veri yüklenirken hata: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        function renderDataItem(item, isBGE) {
+            const badge = isBGE ? 'badge-bge' : 'badge-analysis';
+            const badgeText = isBGE ? 'BGE-M3' : item.metadata?.model || 'Unknown Model';
+            
+            return `
+                <div class="data-item">
+                    <div style="margin-bottom: 10px;">
+                        <span class="badge ${badge}">${badgeText}</span>
+                        <span class="badge badge-other">${item.type}</span>
+                        ${item.content?.textSections ? `<span class="badge badge-other">${item.content.textSections.length} bölüm</span>` : ''}
+                    </div>
+                    <div><strong>ID:</strong> ${item.id}</div>
+                    <div><strong>Dosya:</strong> ${item.content?.filename || 'N/A'}</div>
+                    <div><strong>Başlık:</strong> ${item.content?.title || 'N/A'}</div>
+                    <div><strong>Tür:</strong> ${item.content?.fileType || 'N/A'}</div>
+                    <div><strong>Model:</strong> ${item.metadata?.model || 'N/A'}</div>
+                    <div><strong>Kaynak:</strong> ${item.metadata?.source || 'N/A'}</div>
+                    <div><strong>Tarih:</strong> ${new Date(item.metadata?.timestamp).toLocaleString('tr-TR')}</div>
+                </div>
+            `;
+        }
+
+        // Auto-load on page load
+        window.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>
+

@@ -56,7 +56,7 @@ export function LocalStorageViewPage() {
   const dynamicStats = useMemo(() => {
     const totalDocuments = analysisResults.length
     const totalGroups = documentGroups.length
-    const totalAIData = aiData.length
+    const totalAIData = (aiData || []).length
     const totalGroupAnalysis = groupAnalysisData.length
     const totalItems = totalDocuments + totalGroups + totalAIData + totalGroupAnalysis
     
@@ -69,7 +69,7 @@ export function LocalStorageViewPage() {
       return size + JSON.stringify(group).length
     }, 0)
     
-    const aiDataSize = aiData.reduce((size, item) => {
+    const aiDataSize = (aiData || []).reduce((size, item) => {
       return size + JSON.stringify(item).length
     }, 0)
     
@@ -83,7 +83,7 @@ export function LocalStorageViewPage() {
     const allTimestamps = [
       ...analysisResults.map(doc => new Date(doc.createdAt).getTime()),
       ...documentGroups.map(group => new Date(group.createdAt).getTime()),
-      ...aiData.map(item => new Date(item.metadata.timestamp).getTime()),
+      ...(aiData || []).map(item => new Date(item.metadata.timestamp).getTime()),
       ...groupAnalysisData.map(item => new Date(item.savedAt).getTime())
     ]
     
@@ -171,11 +171,11 @@ export function LocalStorageViewPage() {
     filterData()
   }, [aiData, searchTerm, filterType])
 
-  const loadLocalStorageData = () => {
+  const loadLocalStorageData = async () => {
     setLoading(true)
     try {
-      const data = localStorageService.getAllData()
-      const storageStats = localStorageService.getStats()
+      const data = await localStorageService.getAllData()
+      const storageStats = await localStorageService.getStats()
       
       setAiData(data)
       setStats(storageStats)
@@ -272,15 +272,15 @@ export function LocalStorageViewPage() {
     }
   }
 
-  const deleteDataItem = (id: string) => {
+  const deleteDataItem = async (id: string) => {
     try {
-      const success = localStorageService.deleteData(id)
+      const success = await localStorageService.deleteData(id)
       if (success) {
         toast({
           title: 'Silindi',
           description: 'Veri başarıyla silindi.',
         })
-        loadLocalStorageData() // Reload data
+        await loadLocalStorageData() // Reload data
       } else {
         throw new Error('Delete failed')
       }
@@ -312,9 +312,9 @@ export function LocalStorageViewPage() {
     }
   }
 
-  const exportAllData = () => {
+  const exportAllData = async () => {
     try {
-      const exportData = localStorageService.exportData()
+      const exportData = await localStorageService.exportData()
       if (exportData) {
         const dataBlob = new Blob([exportData], { type: 'application/json' })
         const url = URL.createObjectURL(dataBlob)
@@ -341,11 +341,11 @@ export function LocalStorageViewPage() {
     }
   }
 
-  const clearAllData = () => {
+  const clearAllData = async () => {
     if (window.confirm('Tüm local storage verilerini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz ve tüm dokümanlar, gruplar, AI verileri ve grup analizleri silinecektir.')) {
       try {
         // Clear AI data from localStorage
-        const aiSuccess = localStorageService.clearAllData()
+        const aiSuccess = await localStorageService.clearAllData()
         
         // Clear group analysis data from localStorage
         for (let i = 0; i < localStorage.length; i++) {
@@ -369,7 +369,7 @@ export function LocalStorageViewPage() {
             title: 'Temizlendi',
             description: 'Tüm veriler (dokümanlar, gruplar, AI verileri ve grup analizleri) başarıyla silindi.',
           })
-          loadLocalStorageData() // Reload data
+          await loadLocalStorageData() // Reload data
         } else {
           throw new Error('Clear failed')
         }
