@@ -1366,7 +1366,7 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
             // Format kullanıcı verilerini tutarlı hale getir
             const finalUserData = {
               id: userData.id || userData.user_id || 'user_' + Date.now(),
-              email: userData.email || 'user@supabase.com',
+              email: userData.email || '',
               user_metadata: userData.user_metadata || {
                 full_name: userData.name || userData.full_name || userData.email?.split('@')[0] || 'Supabase User'
               },
@@ -1583,7 +1583,7 @@ ipcMain.handle('supabase:startAuth', async (event, options) => {
         // Format fallback kullanıcı verilerini tutarlı hale getir
         const fallbackUserData = fallbackUserInfo || {
           id: 'user_' + Date.now(),
-          email: 'user@supabase.com',
+          email: '',
           user_metadata: {
             full_name: 'Supabase User'
           },
@@ -1646,6 +1646,81 @@ ipcMain.handle('supabase:getAuthStatus', async () => {
     return {
       ok: false,
       error: error instanceof Error ? error.message : 'Failed to get auth status'
+    };
+  }
+});
+
+// Fetch user info handler
+ipcMain.handle('supabase:fetchUserInfo', async () => {
+  try {
+    if (!tokenStorage) {
+      return {
+        ok: false,
+        error: 'Token storage not initialized'
+      };
+    }
+
+    const tokens = await tokenStorage.getTokens();
+    if (!tokens || tokens.expiresAt <= Date.now()) {
+      return {
+        ok: false,
+        error: 'No valid access token available'
+      };
+    }
+
+    console.log('Fetching user info from Management API...');
+
+    const userEndpoints = [
+      'https://api.supabase.com/v1/profile',
+      'https://api.supabase.com/v1/user',
+      'https://api.supabase.com/v1/me',
+    ];
+
+    for (const endpoint of userEndpoints) {
+      try {
+        console.log(`Trying user endpoint: ${endpoint}`);
+        const userResponse = await fetch(endpoint, {
+          headers: {
+            'Authorization': `Bearer ${tokens.accessToken}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        });
+
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          console.log(`✅ User data retrieved from ${endpoint}`);
+          return {
+            ok: true,
+            user: userData
+          };
+        }
+      } catch (error) {
+        console.warn(`Error fetching from ${endpoint}:`, error);
+      }
+    }
+
+    // Fallback to auth info
+    const authInfo = await tokenStorage.getAuthInfo();
+    if (authInfo) {
+      return {
+        ok: true,
+        user: {
+          email: '',
+          ...authInfo
+        }
+      };
+    }
+
+    return {
+      ok: false,
+      error: 'Failed to fetch user info'
+    };
+  } catch (error) {
+    console.error('Fetch user info error:', error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch user info'
     };
   }
 });

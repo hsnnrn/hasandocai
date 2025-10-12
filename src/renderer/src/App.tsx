@@ -10,6 +10,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { AnalysisResultsPage } from './pages/AnalysisResultsPage'
 import { LocalStorageViewPage } from './pages/LocalStorageViewPage'
 import { ChatBotPage } from './pages/ChatBotPage'
+import { LoginPage } from './pages/LoginPage'
 import { Toaster } from './components/ui/toaster'
 import { useAppStore } from './store/appStore'
 import { Loader2 } from 'lucide-react'
@@ -44,20 +45,19 @@ function App() {
   return (
     <div className={theme}>
       <Router>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/groups" element={<GroupsPage />} />
-            <Route path="/groups/:groupId" element={<GroupManagementPage />} />
-            <Route path="/groups/:groupId/analysis" element={<GroupManagementPage />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/templates" element={<TemplatesPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/results" element={<AnalysisResultsPage />} />
-            <Route path="/local-storage" element={<LocalStorageViewPage />} />
-            <Route path="/chat" element={<ChatBotPage />} />
-          </Routes>
-        </Layout>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<Layout><HomePage /></Layout>} />
+          <Route path="/groups" element={<Layout><GroupsPage /></Layout>} />
+          <Route path="/groups/:groupId" element={<Layout><GroupManagementPage /></Layout>} />
+          <Route path="/groups/:groupId/analysis" element={<Layout><GroupManagementPage /></Layout>} />
+          <Route path="/history" element={<Layout><HistoryPage /></Layout>} />
+          <Route path="/templates" element={<Layout><TemplatesPage /></Layout>} />
+          <Route path="/settings" element={<Layout><SettingsPage /></Layout>} />
+          <Route path="/results" element={<Layout><AnalysisResultsPage /></Layout>} />
+          <Route path="/local-storage" element={<Layout><LocalStorageViewPage /></Layout>} />
+          <Route path="/chat" element={<Layout><ChatBotPage /></Layout>} />
+        </Routes>
       </Router>
       <Toaster />
     </div>

@@ -51,118 +51,39 @@ export function SupabaseProjectSelector({
         setError('')
         
         try {
-          // ✅ Gerçek access token'ı al
-          const credentials = await window.electronAPI.getSupabaseCredentials()
+          // ✅ IPC handler üzerinden projeleri çek (CORS sorunlarını önler)
+          console.log('🔍 Fetching projects via IPC...')
+          const result = await window.supabaseAPI.fetchProjects()
           
-          if (!credentials?.session?.access_token) {
-            throw new Error('Valid access token not found')
-          }
-
-      const accessToken = credentials.session.access_token
-      console.log('🔍 Using real access token for API calls:', accessToken.substring(0, 50) + '...')
-
-          // ✅ Kullanıcı bilgilerini gerçek token ile çek
-          const userResponse = await fetch('https://api.supabase.com/v1/profile', {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          })
-          
-          if (!userResponse.ok) {
-            throw new Error(`User API failed: ${userResponse.status}`)
-          }
-          
-          const userData = await userResponse.json()
-          console.log('✅ Gerçek kullanıcı bilgileri:', userData)
-
-          // ✅ Projeleri gerçek token ile çek
-          const projectsResponse = await fetch('https://api.supabase.com/v1/projects', {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          })
-          
-          if (!projectsResponse.ok) {
-            throw new Error(`Projects API failed: ${projectsResponse.status}`)
-          }
-          
-          const projectsData = await projectsResponse.json()
-          const realProjects = projectsData.projects || projectsData || []
-          
-          setProjects(realProjects)
-          setError('')
-          console.log('✅ Projects fetched successfully:', realProjects.length)
-          
-          // ✅ Gerçek kullanıcı ve proje bilgileriyle userInfo'yu güncelle
-          const updatedUserInfo = {
-            ...userInfo,
-            user: userData, // Gerçek kullanıcı bilgileri
-            projects: realProjects // Gerçek proje bilgileri
-          }
-          
-          // localStorage'a gerçek verileri kaydet
-          localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
-          
-          // Parent component'leri güncelle
-          window.dispatchEvent(new CustomEvent('supabase-login-changed', {
-            detail: { isLoggedIn: true, userInfo: updatedUserInfo }
-          }))
-          
-        } catch (error) {
-          console.error('⚠️ Fetch failed:', error)
-          
-          // Fallback: IPC API'yi kullan
-          try {
-            const result = await window.supabaseAPI.fetchProjects()
+          if (result.ok && result.projects) {
+            setProjects(result.projects)
+            setError('')
+            console.log('Projects auto-fetched successfully:', result.projects.length)
             
-            if (result.ok && result.projects) {
-              setProjects(result.projects)
-              setError('')
-              console.log('Projects auto-fetched successfully (fallback):', result.projects.length)
-              
-              // Also fetch user info to ensure we have the latest data
-              try {
-                const userResult = await window.supabaseAPI.fetchUserInfo()
-                if (userResult.ok && userResult.user) {
-                  console.log('✅ User info auto-fetched successfully:', userResult.user)
-                  
-                  // Update userInfo with both projects and user data
-                  if (userInfo) {
-                    const updatedUserInfo = {
-                      ...userInfo,
-                      projects: result.projects,
-                      user: userResult.user // Update user info with fresh data
-                    }
-                    
-                    // Store updated userInfo in localStorage to persist projects and user data
-                    localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
-                    
-                    // Dispatch event to update parent components
-                    window.dispatchEvent(new CustomEvent('supabase-login-changed', {
-                      detail: { isLoggedIn: true, userInfo: updatedUserInfo }
-                    }))
+            // Also fetch user info to ensure we have the latest data
+            try {
+              const userResult = await window.supabaseAPI.fetchUserInfo()
+              if (userResult.ok && userResult.user) {
+                console.log('✅ User info auto-fetched successfully:', userResult.user)
+                
+                // Update userInfo with both projects and user data
+                if (userInfo) {
+                  const updatedUserInfo = {
+                    ...userInfo,
+                    projects: result.projects,
+                    user: userResult.user // Update user info with fresh data
                   }
-                } else {
-                  console.warn('⚠️ Auto-fetch failed to get user info:', userResult.error)
                   
-                  // Fallback: still update projects
-                  if (userInfo) {
-                    const updatedUserInfo = {
-                      ...userInfo,
-                      projects: result.projects
-                    }
-                    
-                    localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
-                    
-                    window.dispatchEvent(new CustomEvent('supabase-login-changed', {
-                      detail: { isLoggedIn: true, userInfo: updatedUserInfo }
-                    }))
-                  }
+                  // Store updated userInfo in localStorage to persist projects and user data
+                  localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
+                  
+                  // Dispatch event to update parent components
+                  window.dispatchEvent(new CustomEvent('supabase-login-changed', {
+                    detail: { isLoggedIn: true, userInfo: updatedUserInfo }
+                  }))
                 }
-              } catch (userError) {
-                console.error('❌ Error auto-fetching user info:', userError)
+              } else {
+                console.warn('⚠️ Auto-fetch failed to get user info:', userResult.error)
                 
                 // Fallback: still update projects
                 if (userInfo) {
@@ -178,13 +99,29 @@ export function SupabaseProjectSelector({
                   }))
                 }
               }
-            } else {
-              setError(result.error || 'Failed to fetch projects')
+            } catch (userError) {
+              console.error('❌ Error auto-fetching user info:', userError)
+              
+              // Fallback: still update projects
+              if (userInfo) {
+                const updatedUserInfo = {
+                  ...userInfo,
+                  projects: result.projects
+                }
+                
+                localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
+                
+                window.dispatchEvent(new CustomEvent('supabase-login-changed', {
+                  detail: { isLoggedIn: true, userInfo: updatedUserInfo }
+                }))
+              }
             }
-          } catch (fallbackError) {
-            console.error('Error in fallback fetch:', fallbackError)
-            setError('Failed to fetch projects')
+          } else {
+            setError(result.error || 'Failed to fetch projects')
           }
+        } catch (error) {
+          console.error('Error fetching projects:', error)
+          setError('Failed to fetch projects')
         } finally {
           setIsLoading(false)
         }
@@ -204,120 +141,41 @@ export function SupabaseProjectSelector({
     setError('')
     
     try {
-      // ✅ Gerçek access token'ı al
-      const credentials = await window.electronAPI.getSupabaseCredentials()
+      // ✅ IPC handler üzerinden projeleri yenile (CORS sorunlarını önler)
+      console.log('🔍 Refreshing projects via IPC...')
+      const result = await window.supabaseAPI.fetchProjects()
       
-      if (!credentials?.session?.access_token) {
-        throw new Error('Valid access token not found')
-      }
-
-      const accessToken = credentials.session.access_token
-      console.log('🔍 Refresh - Using real access token:', accessToken.substring(0, 50) + '...')
-
-      // ✅ Kullanıcı bilgilerini gerçek token ile çek
-      const userResponse = await fetch('https://api.supabase.com/v1/profile', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (!userResponse.ok) {
-        throw new Error(`User API failed: ${userResponse.status}`)
-      }
-      
-      const userData = await userResponse.json()
-      console.log('✅ Refresh - Gerçek kullanıcı bilgileri:', userData)
-
-      // ✅ Projeleri gerçek token ile çek
-      const projectsResponse = await fetch('https://api.supabase.com/v1/projects', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (!projectsResponse.ok) {
-        throw new Error(`Projects API failed: ${projectsResponse.status}`)
-      }
-      
-      const projectsData = await projectsResponse.json()
-      const realProjects = projectsData.projects || projectsData || []
-      
-      setProjects(realProjects)
-      setError('')
-      console.log('✅ Refresh - Projects fetched successfully:', realProjects.length)
-      
-      // ✅ Gerçek kullanıcı ve proje bilgileriyle userInfo'yu güncelle
-      const updatedUserInfo = {
-        ...userInfo,
-        user: userData, // Gerçek kullanıcı bilgileri
-        projects: realProjects // Gerçek proje bilgileri
-      }
-      
-      // localStorage'a gerçek verileri kaydet
-      localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
-      
-      // Parent component'leri güncelle
-      window.dispatchEvent(new CustomEvent('supabase-login-changed', {
-        detail: { isLoggedIn: true, userInfo: updatedUserInfo }
-      }))
-      
-    } catch (error) {
-      console.error('⚠️ Refresh failed:', error)
-      
-      // Fallback: IPC API'yi kullan
-      try {
-        const result = await window.supabaseAPI.fetchProjects()
+      if (result.ok && result.projects) {
+        setProjects(result.projects)
+        setError('')
+        console.log('Projects refreshed successfully:', result.projects.length)
         
-        if (result.ok && result.projects) {
-          setProjects(result.projects)
-          setError('')
-          console.log('Projects refreshed successfully (fallback):', result.projects.length)
-          
-          // Also fetch user info to ensure we have the latest data
-          try {
-            const userResult = await window.supabaseAPI.fetchUserInfo()
-            if (userResult.ok && userResult.user) {
-              console.log('✅ User info fetched successfully:', userResult.user)
-              
-              // Update userInfo with both projects and user data
-              if (userInfo) {
-                const updatedUserInfo = {
-                  ...userInfo,
-                  projects: result.projects,
-                  user: userResult.user // Update user info with fresh data
-                }
-                
-                // Store updated userInfo in localStorage to persist projects and user data
-                localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
-                
-                // Dispatch event to update parent components
-                window.dispatchEvent(new CustomEvent('supabase-login-changed', {
-                  detail: { isLoggedIn: true, userInfo: updatedUserInfo }
-                }))
-              }
-            } else {
-              console.warn('⚠️ Failed to fetch user info:', userResult.error)
-              
-              // Still update projects even if user info fails
-              if (userInfo) {
-                const updatedUserInfo = {
-                  ...userInfo,
-                  projects: result.projects
-                }
-                
-                localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
-                
-                window.dispatchEvent(new CustomEvent('supabase-login-changed', {
-                  detail: { isLoggedIn: true, userInfo: updatedUserInfo }
-                }))
-              }
-            }
-          } catch (userError) {
-            console.error('❌ Error fetching user info:', userError)
+        // Also fetch user info to ensure we have the latest data
+        try {
+          const userResult = await window.supabaseAPI.fetchUserInfo()
+          if (userResult.ok && userResult.user) {
+            console.log('✅ User info fetched successfully:', userResult.user)
             
-            // Fallback: still update projects
+            // Update userInfo with both projects and user data
+            if (userInfo) {
+              const updatedUserInfo = {
+                ...userInfo,
+                projects: result.projects,
+                user: userResult.user // Update user info with fresh data
+              }
+              
+              // Store updated userInfo in localStorage to persist projects and user data
+              localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
+              
+              // Dispatch event to update parent components
+              window.dispatchEvent(new CustomEvent('supabase-login-changed', {
+                detail: { isLoggedIn: true, userInfo: updatedUserInfo }
+              }))
+            }
+          } else {
+            console.warn('⚠️ Failed to fetch user info:', userResult.error)
+            
+            // Still update projects even if user info fails
             if (userInfo) {
               const updatedUserInfo = {
                 ...userInfo,
@@ -331,13 +189,29 @@ export function SupabaseProjectSelector({
               }))
             }
           }
-        } else {
-          setError(result.error || 'Failed to refresh projects')
+        } catch (userError) {
+          console.error('❌ Error fetching user info:', userError)
+          
+          // Fallback: still update projects
+          if (userInfo) {
+            const updatedUserInfo = {
+              ...userInfo,
+              projects: result.projects
+            }
+            
+            localStorage.setItem('supabase-login', JSON.stringify(updatedUserInfo))
+            
+            window.dispatchEvent(new CustomEvent('supabase-login-changed', {
+              detail: { isLoggedIn: true, userInfo: updatedUserInfo }
+            }))
+          }
         }
-      } catch (fallbackError) {
-        console.error('Error in fallback refresh:', fallbackError)
-        setError('Failed to refresh projects')
+      } else {
+        setError(result.error || 'Failed to refresh projects')
       }
+    } catch (error) {
+      console.error('Error refreshing projects:', error)
+      setError('Failed to refresh projects')
     } finally {
       setIsLoading(false)
     }

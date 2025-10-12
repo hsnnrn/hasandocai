@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Trash2, RefreshCw } from 'lucide-react';
+import { Send, Loader2, Trash2, RefreshCw, Database } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -35,6 +35,10 @@ export function ChatBot() {
   const [localDocs, setLocalDocs] = useState<LocalDocument[]>([]);
   const [docsLoaded, setDocsLoaded] = useState(false);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
+  // 🆕 SUPABASE INTEGRATION
+  const [useSupabase, setUseSupabase] = useState(false);
+  const [supabaseDocs, setSupabaseDocs] = useState<LocalDocument[]>([]);
+  const [isLoadingSupabaseDocs, setIsLoadingSupabaseDocs] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,6 +51,67 @@ export function ChatBot() {
       loadDocuments(false);
     }
   }, [docsLoaded]);
+
+  const loadSupabaseDocuments = async () => {
+    setIsLoadingSupabaseDocs(true);
+    
+    console.log('🔄 Loading documents from Supabase...');
+    
+    try {
+      // Get Supabase login data from localStorage
+      const storedLogin = localStorage.getItem('supabase-login');
+      
+      if (!storedLogin) {
+        console.warn('⚠️ No Supabase login data found');
+        setSupabaseDocs([]);
+        setIsLoadingSupabaseDocs(false);
+        return;
+      }
+      
+      const loginData = JSON.parse(storedLogin);
+      const selectedProject = loginData.selectedProject;
+      const anonKey = loginData.anonKey;
+      const projectUrl = selectedProject?.project_api_url || `https://${selectedProject?.id}.supabase.co`;
+      
+      if (!selectedProject || !anonKey) {
+        console.warn('⚠️ Supabase credentials incomplete');
+        setSupabaseDocs([]);
+        setIsLoadingSupabaseDocs(false);
+        return;
+      }
+      
+      console.log('📡 Fetching from Supabase project:', selectedProject.name);
+      
+      const result = await (window as any).electronAPI.getSupabaseDocumentsForChat({
+        projectUrl,
+        anonKey
+      });
+      
+      console.log('📥 Supabase documents result:', result);
+      
+      if (result.success && result.documents) {
+        setSupabaseDocs(result.documents);
+        console.log(`✅ Loaded ${result.documents.length} documents from Supabase`);
+      } else {
+        console.error('❌ Failed to load Supabase documents:', result.error);
+        setSupabaseDocs([]);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load Supabase documents:', error);
+      setSupabaseDocs([]);
+    } finally {
+      setIsLoadingSupabaseDocs(false);
+    }
+  };
+  
+  // Load Supabase documents when toggle is enabled
+  useEffect(() => {
+    if (useSupabase) {
+      loadSupabaseDocuments();
+    } else {
+      setSupabaseDocs([]);
+    }
+  }, [useSupabase]);
 
   const loadDocuments = async (forceReload: boolean = false) => {
     setIsLoadingDocs(true);
@@ -201,11 +266,18 @@ export function ChatBot() {
         history: conversationHistory.map(h => ({ role: h.role, content: h.content.substring(0, 50) + '...' }))
       });
 
-      // 🆕 UNIFIED MODE: Always use intelligent document chat (handles both document and casual queries)
-      console.log('🔍 Intelligent chat query - localDocs count:', localDocs.length);
-      console.log('📋 localDocs:', localDocs);
+      // 🆕 SUPABASE MODE: If Supabase is enabled, use ONLY Supabase docs (not combined)
+      const allDocs = useSupabase ? supabaseDocs : localDocs;
       
-      if (localDocs.length === 0) {
+      console.log('🔍 Intelligent chat query:', {
+        localDocsCount: localDocs.length,
+        supabaseDocsCount: supabaseDocs.length,
+        totalDocs: allDocs.length,
+        useSupabase
+      });
+      console.log('📋 Combined docs:', allDocs.map(d => ({ filename: d.filename, sections: d.textSections.length })));
+      
+      if (allDocs.length === 0) {
         console.warn('⚠️ No localDocs available - will use simple chat fallback');
         // Fallback to simple chat if no docs
         const response = await (window as any).aiAPI.chatQuery({
@@ -236,11 +308,12 @@ export function ChatBot() {
         return;
       }
 
-      console.log('✅ Sending to AI with', localDocs.length, 'documents');
+      console.log('✅ Sending to AI with', allDocs.length, 'documents');
       console.log('📤 Request payload:', {
         query: userMessage.content,
-        docsCount: localDocs.length,
-        firstDoc: localDocs[0],
+        docsCount: allDocs.length,
+        firstDoc: allDocs[0],
+        useSupabase,
         options: {
           compute: true,
           showRaw: false,
@@ -253,7 +326,7 @@ export function ChatBot() {
       const response = await (window as any).aiAPI.documentChatQuery({
         userId: 'user_' + Date.now(),
         query: userMessage.content,
-        localDocs: localDocs,
+        localDocs: allDocs,
         options: {
           compute: true, // Auto-compute numeric aggregates
           showRaw: false,
@@ -336,10 +409,10 @@ export function ChatBot() {
       <div className="border-b border-gray-200 p-4">
         <div className="flex justify-between items-start mb-3">
           <div className="flex-1">
-            <h2 className="text-lg font-semibold text-gray-900">🤖 AI Chat</h2>
+            <h2 className="text-lg font-semibold text-gray-900">AI Chat</h2>
             {messages.length > 0 && (
               <p className="text-xs text-gray-500 mt-1">
-                💬 {messages.length} mesaj • 🧠 Hafıza aktif (son {Math.min(10, messages.length)} mesaj)
+                {messages.length} mesaj · Hafıza aktif (son {Math.min(10, messages.length)} mesaj)
               </p>
             )}
           </div>
@@ -347,7 +420,7 @@ export function ChatBot() {
             {messages.length > 0 && (
               <button
                 onClick={clearConversation}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
                 title="Konuşmayı temizle"
               >
                 <Trash2 size={16} />
@@ -358,55 +431,96 @@ export function ChatBot() {
         </div>
 
         {/* 🆕 UNIFIED MODE: Single status bar with document info */}
-        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded">
           <div className="flex items-center justify-between">
             <div className="flex-1">
               {isLoadingDocs ? (
-                <div className="flex items-center gap-2 text-sm text-blue-700">
+                <div className="flex items-center gap-2 text-sm text-gray-700">
                   <Loader2 className="animate-spin" size={14} />
                   <span>Belgeler yükleniyor...</span>
                 </div>
-              ) : localDocs.length > 0 ? (
-                <div className="text-sm text-blue-700">
-                  ✅ {localDocs.length} belge hazır ({localDocs.reduce((acc, doc) => acc + doc.textSections.length, 0)} bölüm) • Hem doküman hem de genel sorular sorabilirsiniz
-                </div>
               ) : (
-                <div className="text-sm text-blue-700">
-                  💬 Basit sohbet modu • Belgelerinizi yükleyin ve işleyin, ben de onları analiz edebiliyim
+                <div className="text-sm text-gray-700">
+                  {useSupabase ? (
+                    // Supabase modu aktif - sadece Supabase belgeleri
+                    supabaseDocs.length > 0 ? (
+                      <div>
+                        Supabase: {supabaseDocs.length} belge 
+                        ({supabaseDocs.reduce((acc, doc) => acc + doc.textSections.length, 0)} bölüm)
+                        <span className="ml-2 text-xs text-gray-500">· Sadece Supabase verileri</span>
+                      </div>
+                    ) : (
+                      <div className="text-gray-500">
+                        Supabase aktif · Henüz belge yok
+                      </div>
+                    )
+                  ) : (
+                    // Local modu aktif
+                    localDocs.length > 0 ? (
+                      <div>
+                        Local: {localDocs.length} belge 
+                        ({localDocs.reduce((acc, doc) => acc + doc.textSections.length, 0)} bölüm)
+                        <span className="ml-2 text-xs text-gray-500">· Sadece yerel belgeler</span>
+                      </div>
+                    ) : (
+                      <div className="text-gray-500">Basit sohbet modu · Belgelerinizi yükleyin</div>
+                    )
+                  )}
                 </div>
               )}
             </div>
-            <button
-              onClick={() => {
-                setDocsLoaded(false);
-                loadDocuments(true);
-              }}
-              disabled={isLoadingDocs}
-              className="ml-2 p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
-              title="Belgeleri yeniden yükle"
-            >
-              <RefreshCw size={16} className={isLoadingDocs ? 'animate-spin' : ''} />
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Supabase Toggle */}
+              <button
+                onClick={() => setUseSupabase(!useSupabase)}
+                disabled={isLoadingSupabaseDocs}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded transition-colors ${
+                  useSupabase
+                    ? 'bg-black text-white hover:bg-gray-800'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                } disabled:opacity-50`}
+                title={useSupabase ? 'Supabase belgelerini kullanıyor' : 'Supabase belgelerini kullanmıyor'}
+              >
+                {isLoadingSupabaseDocs ? (
+                  <Loader2 className="animate-spin" size={14} />
+                ) : (
+                  <Database size={14} />
+                )}
+                <span>Supabase</span>
+              </button>
+              
+              <button
+                onClick={() => {
+                  setDocsLoaded(false);
+                  loadDocuments(true);
+                }}
+                disabled={isLoadingDocs}
+                className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
+                title="Belgeleri yeniden yükle"
+              >
+                <RefreshCw size={16} className={isLoadingDocs ? 'animate-spin' : ''} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400">
             <div className="text-center max-w-md">
-              <p className="text-sm mb-4">Merhaba! Size nasıl yardımcı olabilirim?</p>
-              <div className="text-xs text-left bg-gray-50 p-3 rounded-lg">
-                <p className="font-semibold mb-2">💡 Örnek Sorular:</p>
+              <p className="text-sm mb-4 text-gray-500">Merhaba! Size nasıl yardımcı olabilirim?</p>
+              <div className="text-xs text-left bg-gray-50 border border-gray-200 p-3 rounded">
+                <p className="font-semibold mb-2 text-gray-700">Örnek Sorular</p>
                 <ul className="space-y-1 text-gray-600">
                   <li>• <strong>Genel:</strong> "Merhaba", "Nasılsın?", "Yardım"</li>
                   <li>• <strong>Dokümanlar:</strong> "Hangi belgeler var?", "photobox"</li>
                   <li>• <strong>Analiz:</strong> "Fatura tutarı nedir?", "Excel özetle"</li>
                   <li>• <strong>Hesaplama:</strong> "Toplam kaç kişi var?"</li>
                 </ul>
-                <p className="text-xs text-gray-500 mt-2 italic">
-                  🤖 AI otomatik olarak sorunuzu anlayıp doğru şekilde yanıt verecek
+                <p className="text-xs text-gray-500 mt-2">
+                  AI otomatik olarak sorunuzu anlayıp doğru şekilde yanıt verecek
                 </p>
               </div>
             </div>
@@ -418,31 +532,31 @@ export function ChatBot() {
               className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-2xl rounded-lg p-3 ${
+                className={`max-w-2xl rounded p-3 ${
                   message.type === 'user'
                     ? 'bg-black text-white'
                     : message.error
-                    ? 'bg-red-50 border border-red-200 text-red-900'
+                    ? 'bg-gray-50 border border-gray-300 text-gray-900'
                     : 'bg-gray-50 border border-gray-200 text-gray-900'
                 }`}
               >
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 
-                <div className="mt-1 text-xs text-gray-400">
+                <div className={`mt-1 text-xs ${message.type === 'user' ? 'text-gray-300' : 'text-gray-500'}`}>
                   {message.timestamp.toLocaleTimeString('tr-TR')}
                   {message.meta && message.meta.query_type === 'document_query' && (
                     <span className="ml-2">
-                      📊 {message.meta.foundReferences?.length || message.meta.sources?.length || 0} kaynak
+                      · {message.meta.foundReferences?.length || message.meta.sources?.length || 0} kaynak
                       {message.meta.confidence !== undefined && (
-                        <span className="ml-1">• Güven: {(message.meta.confidence * 100).toFixed(0)}%</span>
+                        <span className="ml-1">· Güven: {(message.meta.confidence * 100).toFixed(0)}%</span>
                       )}
                     </span>
                   )}
                   {message.meta && message.meta.query_type === 'casual_chat' && (
-                    <span className="ml-2">💬 Sohbet</span>
+                    <span className="ml-2">· Sohbet</span>
                   )}
                   {message.meta && message.meta.query_type === 'meta_query' && (
-                    <span className="ml-2">📋 Bilgi</span>
+                    <span className="ml-2">· Bilgi</span>
                   )}
                 </div>
               </div>
@@ -452,7 +566,7 @@ export function ChatBot() {
 
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center gap-2">
+            <div className="bg-gray-50 border border-gray-200 rounded p-3 flex items-center gap-2">
               <Loader2 className="animate-spin" size={16} />
               <span className="text-sm text-gray-600">
                 Düşünüyorum...
@@ -479,13 +593,13 @@ export function ChatBot() {
                   handleSubmit(e);
                 }
               }}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
               rows={3}
             />
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 h-fit"
+              className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 h-fit"
             >
               {isLoading ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
               <span>Gönder</span>
@@ -493,12 +607,12 @@ export function ChatBot() {
           </div>
           {input.length > 0 && (
             <div className="flex justify-between text-xs">
-              <span className={input.length > 15000 ? 'text-red-600 font-medium' : 'text-gray-500'}>
+              <span className={input.length > 15000 ? 'text-gray-900 font-medium' : 'text-gray-500'}>
                 {input.length.toLocaleString('tr-TR')} / 15.000 karakter
                 {input.length > 15000 && ' (Limit aşıldı! Mesaj kısaltılacak)'}
               </span>
               <span className="text-gray-400">
-                Shift + Enter: Yeni satır | Enter: Gönder
+                Shift + Enter: Yeni satır · Enter: Gönder
               </span>
             </div>
           )}

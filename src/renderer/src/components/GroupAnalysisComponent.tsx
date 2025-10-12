@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Brain, 
-  Loader2, 
-  FileText, 
-  Network, 
-  BarChart3, 
-  Layers, 
-  Target, 
+import {
+  Brain,
+  Loader2,
+  FileText,
+  Network,
+  BarChart3,
+  Layers,
+  Target,
   Zap,
   CheckCircle,
   AlertCircle,
@@ -18,10 +18,27 @@ import {
   TrendingUp,
   Users,
   FileCheck,
-  Save
+  Save,
+  Database
 } from 'lucide-react'
 import { useAppStore, DocumentGroup, GroupAnalysisResult } from '@/store/appStore'
 import { useToast } from '@/hooks/use-toast'
+import { GroupAnalysisSupabaseSetupModal } from './GroupAnalysisSupabaseSetupModal'
+
+// Declare the groupAnalysisSupabaseAPI for TypeScript
+declare global {
+  interface Window {
+    groupAnalysisSupabaseAPI: {
+      initialize: (projectUrl: string, anonKey: string) => Promise<{ success: boolean; error?: string }>;
+      transferGroupAnalysis: (transferData: any) => Promise<{ success: boolean; message?: string; groupId?: string; documentsCount?: number; analysisResultsCount?: number; error?: string }>;
+      getGroupAnalysisSummary: (groupId: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+      getUserGroups: (userId?: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+      getGroupAnalysisResults: (groupId: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+      deleteGroup: (groupId: string) => Promise<{ success: boolean; error?: string }>;
+      getStatus: () => Promise<{ initialized: boolean; ready: boolean; error?: string }>;
+    };
+  }
+}
 
 interface GroupAnalysisComponentProps {
   group: DocumentGroup
@@ -37,11 +54,253 @@ export function GroupAnalysisComponent({ group, onAnalysisComplete }: GroupAnaly
   const [currentAnalysisStep, setCurrentAnalysisStep] = useState('')
   const [analysisResults, setAnalysisResults] = useState<GroupAnalysisResult[]>([])
   const [hasSavedResults, setHasSavedResults] = useState(false)
+  const [isTransferringToSupabase, setIsTransferringToSupabase] = useState(false)
+  const [supabaseStatus, setSupabaseStatus] = useState<{ initialized: boolean; ready: boolean }>({ initialized: false, ready: false })
+  const [showSupabaseSetupModal, setShowSupabaseSetupModal] = useState(false)
 
   // Load saved analysis results when component mounts
   useEffect(() => {
     loadSavedAnalysisResults()
+    checkSupabaseStatus()
   }, [group.id])
+
+  const checkSupabaseStatus = async () => {
+    try {
+      if (window.groupAnalysisSupabaseAPI) {
+        const status = await window.groupAnalysisSupabaseAPI.getStatus()
+        setSupabaseStatus(status)
+      }
+    } catch (error) {
+      console.error('Failed to check Supabase status:', error)
+    }
+  }
+
+  const initializeSupabase = async () => {
+    try {
+      // Get Supabase login data from localStorage
+      const storedLogin = localStorage.getItem('supabase-login')
+      
+      if (!storedLogin) {
+        toast({
+          title: 'Supabase Giriş Gerekli',
+          description: 'Supabase\'e giriş yapmanız gerekiyor. Lütfen önce giriş yapın.',
+          variant: 'destructive'
+        })
+        return false
+      }
+      
+      const loginData = JSON.parse(storedLogin)
+      const selectedProject = loginData.selectedProject
+      const anonKey = loginData.anonKey
+      const projectUrl = selectedProject?.project_api_url || `https://${selectedProject?.id}.supabase.co`
+      
+      if (!selectedProject || !anonKey) {
+        toast({
+          title: 'Supabase Kimlik Bilgileri Eksik',
+          description: 'Supabase proje bilgileri bulunamadı. Lütfen tekrar giriş yapın.',
+          variant: 'destructive'
+        })
+        return false
+      }
+      
+      console.log('Initializing Group Analysis Supabase Service...')
+      
+      // Pass projectId to initialize (same as single document upload)
+      const result = await window.groupAnalysisSupabaseAPI.initialize(projectUrl, anonKey, selectedProject.id)
+      
+      if (result.success) {
+        setSupabaseStatus({ initialized: true, ready: true })
+        toast({
+          title: 'Supabase Bağlantısı Başarılı',
+          description: `"${selectedProject.name}" projesine bağlandı.`,
+        })
+        return true
+      } else {
+        // Check if tables need manual setup (same as single document upload)
+        if (result.needsManualSetup) {
+          // Show setup modal for missing tables
+          console.log('Tables not found, showing setup modal with SQL script')
+          setShowSupabaseSetupModal(true)
+          toast({
+            title: 'Veritabanı Tabloları Bulunamadı',
+            description: 'Grup analizi için gerekli tablolar oluşturulmamış. Kurulum adımlarını takip edin.',
+            variant: 'destructive'
+          })
+          return false
+        } else if (result.errorCode === 'PGRST205' || 
+            (result.error && (
+              result.error.includes('Could not find the table') || 
+              result.error.includes('does not exist') ||
+              result.error.includes('schema cache')
+            ))) {
+          // Fallback: Show setup modal for missing tables
+          console.log('Table not found error detected, showing setup modal')
+          setShowSupabaseSetupModal(true)
+          toast({
+            title: 'Veritabanı Tabloları Bulunamadı',
+            description: 'Grup analizi için gerekli tablolar oluşturulmamış. Kurulum adımlarını takip edin.',
+            variant: 'destructive'
+          })
+          return false
+        } else {
+          toast({
+            title: 'Supabase Bağlantı Hatası',
+            description: result.error || 'Supabase bağlantısı kurulamadı.',
+            variant: 'destructive'
+          })
+          return false
+        }
+      }
+    } catch (error) {
+      console.error('Failed to initialize Supabase:', error)
+      toast({
+        title: 'Supabase Başlatma Hatası',
+        description: 'Supabase servisi başlatılamadı.',
+        variant: 'destructive'
+      })
+      return false
+    }
+  }
+
+  const handleTransferToSupabase = async () => {
+    if (!group.groupAnalysisResults || group.groupAnalysisResults.length === 0) {
+      toast({
+        title: 'Analiz Sonucu Bulunamadı',
+        description: 'Supabase\'e aktarmak için önce grup analizi yapın.',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    setIsTransferringToSupabase(true)
+
+    try {
+      // Initialize Supabase if not already initialized
+      if (!supabaseStatus.ready) {
+        const initialized = await initializeSupabase()
+        if (!initialized) {
+          setIsTransferringToSupabase(false)
+          return
+        }
+      }
+
+      // Prepare transfer data
+      const transferData = {
+        groupId: group.id,
+        groupName: group.name,
+        groupDescription: group.description,
+        documents: group.documents.map(doc => ({
+          documentId: doc.documentId,
+          filename: doc.filename,
+          title: doc.title || doc.filename,
+          fileType: doc.fileType,
+          fileSize: doc.fileSize,
+          pageCount: doc.pageCount,
+          createdAt: doc.createdAt,
+          textSections: doc.textSections || [],
+          aiCommentary: doc.aiCommentary || [],
+          embeddings: doc.embeddings || [],
+          metadata: doc.metadata || {}
+        })),
+        analysisResults: group.groupAnalysisResults.map(result => ({
+          id: result.id,
+          analysisType: result.analysisType,
+          content: result.content,
+          confidenceScore: result.confidenceScore,
+          language: result.language,
+          aiModel: result.aiModel,
+          processingTimeMs: result.processingTimeMs,
+          createdAt: result.createdAt
+        })),
+        userId: 'anonymous' // You can get this from user context if available
+      }
+
+      console.log('Transferring group analysis to Supabase...')
+      console.log('Transfer data summary:', {
+        groupId: transferData.groupId,
+        groupName: transferData.groupName,
+        documentsCount: transferData.documents.length,
+        analysisResultsCount: transferData.analysisResults.length
+      })
+      
+      // Debug: Log detailed transfer data
+      console.log('Detailed transfer data:', transferData)
+      console.log('Documents data sample:', transferData.documents[0] ? {
+        documentId: transferData.documents[0].documentId,
+        filename: transferData.documents[0].filename,
+        title: transferData.documents[0].title,
+        fileType: transferData.documents[0].fileType,
+        textSectionsCount: transferData.documents[0].textSections?.length || 0,
+        aiCommentaryCount: transferData.documents[0].aiCommentary?.length || 0
+      } : 'No documents')
+      
+      console.log('Analysis results sample:', transferData.analysisResults[0] ? {
+        id: transferData.analysisResults[0].id,
+        analysisType: transferData.analysisResults[0].analysisType,
+        contentLength: transferData.analysisResults[0].content?.length || 0
+      } : 'No analysis results')
+
+      console.log('Calling window.groupAnalysisSupabaseAPI.transferGroupAnalysis...')
+      const result = await window.groupAnalysisSupabaseAPI.transferGroupAnalysis(transferData)
+      console.log('Transfer result:', result)
+
+      if (result.success) {
+        toast({
+          title: 'Supabase Aktarımı Başarılı',
+          description: `${result.documentsCount} doküman ve ${result.analysisResultsCount} analiz sonucu Supabase'e aktarıldı.`,
+        })
+      } else {
+        // Check if it's a table not found error
+        if (result.error && (
+          result.error.includes('Could not find the table') || 
+          result.error.includes('does not exist') ||
+          result.error.includes('PGRST205') ||
+          result.error.includes('schema cache')
+        )) {
+          // Show setup modal for missing tables
+          setShowSupabaseSetupModal(true)
+          toast({
+            title: 'Veritabanı Tabloları Bulunamadı',
+            description: 'Grup analizi için gerekli tablolar oluşturulmamış. Kurulum adımlarını takip edin.',
+            variant: 'destructive'
+          })
+        } else {
+          toast({
+            title: 'Supabase Aktarım Hatası',
+            description: result.error || 'Veriler Supabase\'e aktarılamadı.',
+            variant: 'destructive'
+          })
+        }
+      }
+
+    } catch (error) {
+      console.error('Failed to transfer to Supabase:', error)
+      
+      // Check if it's a table not found error
+      if (error instanceof Error && (
+        error.message.includes('Could not find the table') || 
+        error.message.includes('does not exist') ||
+        error.message.includes('PGRST205') ||
+        error.message.includes('schema cache')
+      )) {
+        // Show setup modal for missing tables
+        setShowSupabaseSetupModal(true)
+        toast({
+          title: 'Veritabanı Tabloları Bulunamadı',
+          description: 'Grup analizi için gerekli tablolar oluşturulmamış. Kurulum adımlarını takip edin.',
+          variant: 'destructive'
+        })
+      } else {
+        toast({
+          title: 'Supabase Aktarım Hatası',
+          description: 'Veriler aktarılırken bir hata oluştu.',
+          variant: 'destructive'
+        })
+      }
+    } finally {
+      setIsTransferringToSupabase(false)
+    }
+  }
 
   const loadSavedAnalysisResults = () => {
     try {
@@ -379,6 +638,26 @@ export function GroupAnalysisComponent({ group, onAnalysisComplete }: GroupAnaly
               </Button>
           )}
           
+          {/* Supabase Transfer Button */}
+          {group.groupAnalysisResults && group.groupAnalysisResults.length > 0 && (
+            <Button
+              onClick={handleTransferToSupabase}
+              disabled={isTransferringToSupabase}
+              variant="outline"
+              size="sm"
+              className="flex items-center space-x-1 text-blue-600 border-blue-600 hover:bg-blue-50 disabled:opacity-50"
+            >
+              {isTransferringToSupabase ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Database className="h-4 w-4" />
+              )}
+              <span>
+                {isTransferringToSupabase ? 'Aktarılıyor...' : 'Supabase\'e Aktar'}
+              </span>
+            </Button>
+          )}
+          
           {/* Analysis Button */}
           <Button
             onClick={performGroupAnalysis}
@@ -574,6 +853,22 @@ export function GroupAnalysisComponent({ group, onAnalysisComplete }: GroupAnaly
           )}
         </Card>
       )}
+
+      {/* Supabase Setup Modal */}
+      <GroupAnalysisSupabaseSetupModal
+        isOpen={showSupabaseSetupModal}
+        onClose={() => setShowSupabaseSetupModal(false)}
+        onRetry={() => {
+          // Retry Supabase initialization after setup
+          setTimeout(async () => {
+            await initializeSupabase()
+            // Optionally retry the transfer
+            if (group.groupAnalysisResults && group.groupAnalysisResults.length > 0) {
+              handleTransferToSupabase()
+            }
+          }, 1000)
+        }}
+      />
     </div>
   )
 }

@@ -96,6 +96,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Supabase Upload Methods
   uploadAnalysisToSupabase: (analysisResult: any) => ipcRenderer.invoke('supabase:uploadAnalysis', analysisResult),
   
+  // Supabase Chat Methods
+  getSupabaseDocumentsForChat: (options?: any) => ipcRenderer.invoke('supabase:getDocumentsForChat', options),
+  
   // Auth Methods
   saveAuthInfo: (authInfo: any) => ipcRenderer.invoke('auth:saveAuthInfo', authInfo),
   getSupabaseCredentials: () => ipcRenderer.invoke('auth:getSupabaseCredentials'),
@@ -156,6 +159,37 @@ contextBridge.exposeInMainWorld('aiAPI', {
   // Document Migration Methods (NEW - for semantic classification)
   migrateAllDocuments: () => ipcRenderer.invoke('migration:migrateAllDocuments'),
   getDocumentMigrationStatus: () => ipcRenderer.invoke('migration:getStatus'),
+});
+
+// Group Analysis Supabase API
+contextBridge.exposeInMainWorld('groupAnalysisSupabaseAPI', {
+  // Initialize Group Analysis Supabase Service
+  initialize: (projectUrl: string, anonKey: string, projectId?: string) => 
+    ipcRenderer.invoke('group-analysis-supabase:initialize', { projectUrl, anonKey, projectId }),
+  
+  // Transfer Group Analysis Data to Supabase
+  transferGroupAnalysis: (transferData: any) => 
+    ipcRenderer.invoke('group-analysis-supabase:transfer', transferData),
+  
+  // Get Group Analysis Summary from Supabase
+  getGroupAnalysisSummary: (groupId: string) => 
+    ipcRenderer.invoke('group-analysis-supabase:get-summary', { groupId }),
+  
+  // Get User Groups from Supabase
+  getUserGroups: (userId?: string) => 
+    ipcRenderer.invoke('group-analysis-supabase:get-user-groups', { userId }),
+  
+  // Get Group Analysis Results from Supabase
+  getGroupAnalysisResults: (groupId: string) => 
+    ipcRenderer.invoke('group-analysis-supabase:get-analysis-results', { groupId }),
+  
+  // Delete Group from Supabase
+  deleteGroup: (groupId: string) => 
+    ipcRenderer.invoke('group-analysis-supabase:delete-group', { groupId }),
+  
+  // Get Service Status
+  getStatus: () => 
+    ipcRenderer.invoke('group-analysis-supabase:get-status'),
 });
 
 // Types for TypeScript
@@ -508,5 +542,16 @@ declare global {
     debug: {
       checkStorage: () => Promise<{ success: boolean; data?: any; error?: string }>;
     };
+
+      // Group Analysis Supabase API
+      groupAnalysisSupabaseAPI: {
+        initialize: (projectUrl: string, anonKey: string) => Promise<{ success: boolean; error?: string; errorCode?: string; errorDetails?: any; errorHint?: string }>;
+        transferGroupAnalysis: (transferData: any) => Promise<{ success: boolean; message?: string; groupId?: string; documentsCount?: number; analysisResultsCount?: number; error?: string; errorCode?: string }>;
+        getGroupAnalysisSummary: (groupId: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+        getUserGroups: (userId?: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+        getGroupAnalysisResults: (groupId: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+        deleteGroup: (groupId: string) => Promise<{ success: boolean; error?: string }>;
+        getStatus: () => Promise<{ initialized: boolean; ready: boolean; error?: string }>;
+      };
   }
 }

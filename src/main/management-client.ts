@@ -178,7 +178,8 @@ export class SupabaseManagementClient {
    */
   async getProjects(orgId: string): Promise<ApiResponse<Project[]>> {
     try {
-      const result = await this.makeRequest<Project[]>(`/organizations/${orgId}/projects`);
+      // Doğru endpoint: query parameter ile
+      const result = await this.makeRequest<Project[]>(`/projects?organization_id=${orgId}`);
       return result;
     } catch (error) {
       return {

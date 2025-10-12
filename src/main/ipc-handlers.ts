@@ -29,6 +29,7 @@ import { DocumentIngestPipeline } from './ai/documentIngestPipeline';
 import { RawDocument } from './ai/documentNormalizer';
 import { LocalRetrievalClient } from './ai/localRetrievalClient';
 import { DocumentMigrator } from './ai/documentMigrator';
+import { GroupAnalysisSupabaseService } from './services/GroupAnalysisSupabaseService';
 
 // Global token storage reference
 let tokenStorage: any = null;
@@ -44,6 +45,7 @@ let groupAnalysisService: GroupAnalysisService | null = null;
 let documentIngestPipeline: DocumentIngestPipeline | null = null;
 let localRetrievalClient: LocalRetrievalClient | null = null;
 let documentMigrator: DocumentMigrator | null = null;
+let groupAnalysisSupabaseService: GroupAnalysisSupabaseService | null = null;
 
 /**
  * Initialize Supabase connection
@@ -1216,34 +1218,58 @@ ipcMain.handle('supabase:uploadAnalysis', async (event, analysisResult: any) => 
   console.log('🚀🚀🚀 MAIN PROCESS: supabase:uploadAnalysis handler called with documentId:', analysisResult.documentId);
   console.log('📊 MAIN PROCESS: Analysis result keys:', Object.keys(analysisResult));
   console.log('🔍 MAIN PROCESS: Selected project:', analysisResult.selectedProject);
-  console.log('🔍 MAIN PROCESS: Full analysis result:', JSON.stringify(analysisResult, null, 2));
+  console.log('🔍 MAIN PROCESS: Anon key provided:', !!analysisResult.anonKey);
+  console.log('🔍 MAIN PROCESS: Anon key type:', typeof analysisResult.anonKey);
+  console.log('🔍 MAIN PROCESS: Anon key preview:', analysisResult.anonKey ? analysisResult.anonKey.substring(0, 50) + '...' : 'MISSING');
+  console.log('🔍 MAIN PROCESS: Anon key length:', analysisResult.anonKey ? analysisResult.anonKey.length : 0);
+  console.log('🔍 MAIN PROCESS: Project URL:', analysisResult.projectUrl);
+  console.log('🔍🔍🔍 MAIN PROCESS: FULL ANON KEY (first 100 chars):', analysisResult.anonKey ? analysisResult.anonKey.substring(0, 100) : 'MISSING');
+  console.log('🔍🔍🔍 MAIN PROCESS: FULL ANON KEY (last 50 chars):', analysisResult.anonKey ? analysisResult.anonKey.substring(analysisResult.anonKey.length - 50) : 'MISSING');
+  
   try {
     // Get Supabase project configuration from stored login data
-    // Note: In main process, we need to get this from the renderer process
-    // For now, we'll use environment variables or ask the renderer to pass the project info
     const selectedProject = analysisResult.selectedProject;
+    const anonKey = analysisResult.anonKey;
+    const projectUrl = analysisResult.projectUrl;
+    
+    console.log('🔑 EXTRACTED - Anon key:', anonKey ? anonKey.substring(0, 50) + '...' : 'NULL');
+    console.log('🔑 EXTRACTED - Anon key parts:', anonKey ? anonKey.split('.').length : 0);
+    console.log('🔑🔑🔑 EXTRACTED - JWT Parts:', anonKey ? anonKey.split('.').map((part: string, i: number) => `Part ${i+1}: ${part.substring(0, 20)}...`) : 'NULL');
     
     if (!selectedProject) {
       throw new Error('No Supabase project selected. Please login and select a project first.');
     }
 
-    // Create authenticated Supabase client using access token
-    const { createAuthenticatedSupabaseClient, ensureValidProjectUrl } = await import('./supabase-client');
+    if (!anonKey || anonKey.trim().length === 0) {
+      throw new Error('Anon key is required. Please provide your Supabase project\'s anon key.');
+    }
+
+    // Create Supabase client using anon key
+    const { createClient } = await import('@supabase/supabase-js');
+    const { ensureValidProjectUrl } = await import('./supabase-client');
     
     // Always construct the project URL properly using the project ID
-    const supabaseUrl = ensureValidProjectUrl(selectedProject.id, selectedProject.project_api_url);
+    const supabaseUrl = projectUrl || ensureValidProjectUrl(selectedProject.id, selectedProject.project_api_url);
     
     console.log('🔗 Using Supabase URL:', supabaseUrl);
-    console.log('🔑 Using access token authentication');
+    console.log('🔑 Creating Supabase client with anon key (no OAuth)');
+    console.log('🔑 Anon key preview:', anonKey.substring(0, 30) + '...');
     
-    const supabase = await createAuthenticatedSupabaseClient(selectedProject.id, supabaseUrl);
+    // Create client with anon key only (public access)
+    const supabase = createClient(supabaseUrl, anonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
+      }
+    });
     
     if (!supabase) {
-      throw new Error('Failed to create authenticated Supabase client. Please ensure you are logged in with valid OAuth tokens.');
+      throw new Error('Failed to create Supabase client. Please check your anon key and project URL.');
     }
     
-    // Test connection and authentication
-    console.log('🔍 Testing Supabase connection and authentication...');
+    // Test connection
+    console.log('🔍 Testing Supabase connection...');
     const { data: testData, error: testError } = await supabase
       .from('documents')
       .select('id')
@@ -1257,40 +1283,134 @@ ipcMain.handle('supabase:uploadAnalysis', async (event, analysisResult: any) => 
         details: testError.details,
         hint: testError.hint
       });
-      throw new Error(`Failed to connect to Supabase: ${testError.message}`);
+      
+      // Check if table doesn't exist
+      if (testError.code === 'PGRST116' || testError.code === 'PGRST205' || 
+          testError.message?.includes('relation') || 
+          testError.message?.includes('does not exist') ||
+          testError.message?.includes('Could not find the table')) {
+        console.log('📋 Documents table not found, attempting to create schema...');
+        
+        try {
+          // Create minimal schema without RLS
+          const createTablesSQL = `
+            -- Enable extensions
+            CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+            
+            -- Documents table
+            CREATE TABLE IF NOT EXISTS documents (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                file_type TEXT,
+                page_count INTEGER,
+                user_id TEXT DEFAULT 'anonymous',
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            
+            -- Text sections table
+            CREATE TABLE IF NOT EXISTS text_sections (
+                id TEXT PRIMARY KEY,
+                document_id TEXT REFERENCES documents(id) ON DELETE CASCADE,
+                page_number INTEGER,
+                section_title TEXT,
+                content TEXT NOT NULL,
+                content_type TEXT DEFAULT 'paragraph',
+                order_index INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            
+            -- AI commentary table
+            CREATE TABLE IF NOT EXISTS ai_commentary (
+                id TEXT PRIMARY KEY,
+                text_section_id TEXT,
+                document_id TEXT REFERENCES documents(id) ON DELETE CASCADE,
+                commentary_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                confidence_score FLOAT,
+                language TEXT DEFAULT 'tr',
+                ai_model TEXT DEFAULT 'BGE-M3',
+                processing_time_ms INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            
+            -- Indexes
+            CREATE INDEX IF NOT EXISTS idx_text_sections_document_id ON text_sections(document_id);
+            CREATE INDEX IF NOT EXISTS idx_ai_commentary_document_id ON ai_commentary(document_id);
+            
+            -- Disable RLS for public access with anon key
+            ALTER TABLE documents DISABLE ROW LEVEL SECURITY;
+            ALTER TABLE text_sections DISABLE ROW LEVEL SECURITY;
+            ALTER TABLE ai_commentary DISABLE ROW LEVEL SECURITY;
+          `;
+          
+          // Anon key ile DDL komutları çalıştırılamaz
+          // Kullanıcıya SQL'i göster ve Dashboard'da çalıştırmasını iste
+          console.log('📋 SQL to create tables:', createTablesSQL);
+          
+          // Provide detailed error message with SQL for in-app dialog
+          const dashboardUrl = `https://supabase.com/dashboard/project/${selectedProject.id}/sql/new`;
+          
+          console.log('📋 Returning SQL setup info to renderer for in-app dialog');
+          
+          // Return data for in-app SQL setup dialog
+          return {
+            success: false,
+            error: `Supabase'de 'documents' tablosu bulunamadı. SQL setup dialog açılacak.`,
+            dashboardUrl,
+            createTablesSQL,
+            needsManualSetup: true
+          };
+          
+        } catch (createError) {
+          console.error('❌ Failed to handle missing tables:', createError);
+          // Re-throw the error with instructions
+          if (createError instanceof Error) {
+            throw createError;
+          }
+          throw new Error(String(createError));
+        }
+      } else if (testError.code === '42501' || testError.message?.includes('permission denied') || testError.message?.includes('RLS')) {
+        throw new Error(
+          `Supabase RLS (Row Level Security) politikaları nedeniyle erişim reddedildi.\n\n` +
+          `Çözüm 1: SQL Editor'da şu komutu çalıştırın:\n` +
+          `ALTER TABLE documents DISABLE ROW LEVEL SECURITY;\n` +
+          `ALTER TABLE text_sections DISABLE ROW LEVEL SECURITY;\n` +
+          `ALTER TABLE ai_commentary DISABLE ROW LEVEL SECURITY;\n\n` +
+          `Çözüm 2: Public access policy ekleyin:\n` +
+          `CREATE POLICY "Enable read access for all users" ON documents FOR SELECT USING (true);\n` +
+          `CREATE POLICY "Enable insert access for all users" ON documents FOR INSERT WITH CHECK (true);`
+        );
+      } else {
+      throw new Error(`Supabase bağlantı hatası: ${testError.message}`);
+      }
     }
     
-    console.log('✅ Supabase connection and authentication successful');
+    console.log('✅ Supabase connection successful');
     
-    console.log('Uploading to Supabase project:', selectedProject.name);
-    console.log('Supabase URL:', supabaseUrl);
+    console.log('📤 Uploading to Supabase project:', selectedProject.name);
+    console.log('🔗 Supabase URL:', supabaseUrl);
     
     // Validate analysis result data
     if (!analysisResult.documentId || !analysisResult.title || !analysisResult.filename) {
       throw new Error('Invalid analysis result: missing required fields (documentId, title, filename)');
     }
     
-    // Get the authenticated user info
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError) {
-      console.error('Failed to get authenticated user:', userError);
-      throw new Error(`Authentication error: ${userError.message}`);
-    }
-    
-    if (!user) {
-      throw new Error('No authenticated user found. Please ensure you are logged in.');
-    }
-    
-    console.log('✅ Authenticated user:', user.id);
+    // Since we're using anon key without OAuth, use a default user ID
+    // In production, you should implement proper authentication
+    const userId = 'anonymous'; // or use selectedProject.organization_id
+    console.log('📝 Using user ID:', userId);
     
     // Start transaction to save all data
+    // Remove null bytes from all text fields for PostgreSQL compatibility
     const documentData = {
       id: analysisResult.documentId,
-      title: analysisResult.title,
-      filename: analysisResult.filename,
+      title: analysisResult.title.replace(/\u0000/g, ''),
+      filename: analysisResult.filename.replace(/\u0000/g, ''),
       file_type: analysisResult.fileType.toLowerCase(),
       page_count: analysisResult.pageCount || analysisResult.sheetCount || analysisResult.slideCount || 1,
-      user_id: user.id, // Use the actual authenticated user ID
+      user_id: userId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -1318,8 +1438,8 @@ ipcMain.handle('supabase:uploadAnalysis', async (event, analysisResult: any) => 
         id: section.id || `section_${Date.now()}_${index}`,
         document_id: document.id,
         page_number: section.pageNumber || 1,
-        section_title: section.sectionTitle || null,
-        content: section.content,
+        section_title: section.sectionTitle ? section.sectionTitle.replace(/\u0000/g, '') : null,
+        content: section.content.replace(/\u0000/g, ''), // Remove null bytes for PostgreSQL
         content_type: section.contentType || 'paragraph',
         order_index: section.orderIndex || index,
         created_at: new Date().toISOString()
@@ -1345,7 +1465,7 @@ ipcMain.handle('supabase:uploadAnalysis', async (event, analysisResult: any) => 
         document_id: document.id,
         text_section_id: commentary.textSectionId || null,
         commentary_type: commentary.commentaryType || 'summary',
-        content: commentary.content,
+        content: commentary.content.replace(/\u0000/g, ''), // Remove null bytes for PostgreSQL
         confidence_score: commentary.confidenceScore || 0.8,
         language: commentary.language || 'tr',
         ai_model: commentary.aiModel || 'BGE-M3',
@@ -1386,6 +1506,133 @@ ipcMain.handle('supabase:uploadAnalysis', async (event, analysisResult: any) => 
 });
 
 console.log('Supabase Upload IPC handlers registered');
+
+/**
+ * Fetch documents from Supabase for chatbot
+ */
+ipcMain.handle('supabase:getDocumentsForChat', async (event, options?: { projectUrl?: string; anonKey?: string }) => {
+  console.log('🚀 supabase:getDocumentsForChat called with options:', options);
+  
+  try {
+    // Get credentials from localStorage or options
+    let projectUrl = options?.projectUrl;
+    let anonKey = options?.anonKey;
+    
+    if (!projectUrl || !anonKey) {
+      // Try to get from stored login data
+      const storage = getTokenStorage();
+      const authInfo = await storage.getAuthInfo();
+      
+      if (authInfo && authInfo.selectedProject) {
+        const project = authInfo.selectedProject as any;
+        projectUrl = project.project_api_url || `https://${project.id}.supabase.co`;
+        anonKey = authInfo.anonKey;
+      }
+    }
+    
+    if (!projectUrl || !anonKey) {
+      console.warn('⚠️ No Supabase credentials available for chatbot');
+      return {
+        success: false,
+        error: 'Supabase bağlantı bilgileri bulunamadı. Lütfen Settings > Supabase\'den giriş yapın.',
+        documents: []
+      };
+    }
+    
+    console.log('🔗 Using Supabase URL:', projectUrl);
+    console.log('🔑 Using anon key:', anonKey ? anonKey.substring(0, 30) + '...' : 'MISSING');
+    
+    // Create Supabase client
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(projectUrl, anonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
+      }
+    });
+    
+    // Fetch documents with text sections and AI commentary
+    console.log('📥 Fetching documents from Supabase...');
+    const { data: documents, error: docsError } = await supabase
+      .from('documents')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50); // Limit to recent 50 documents
+    
+    if (docsError) {
+      console.error('❌ Failed to fetch documents:', docsError);
+      return {
+        success: false,
+        error: `Belgeler getirilemedi: ${docsError.message}`,
+        documents: []
+      };
+    }
+    
+    console.log(`✅ Fetched ${documents?.length || 0} documents from Supabase`);
+    
+    if (!documents || documents.length === 0) {
+      return {
+        success: true,
+        documents: [],
+        message: 'Supabase\'de henüz belge yok.'
+      };
+    }
+    
+    // Fetch text sections and AI commentary for each document
+    const documentsWithData = await Promise.all(
+      documents.map(async (doc: any) => {
+        // Get text sections
+        const { data: textSections } = await supabase
+          .from('text_sections')
+          .select('*')
+          .eq('document_id', doc.id)
+          .order('order_index', { ascending: true });
+        
+        // Get AI commentary
+        const { data: aiCommentary } = await supabase
+          .from('ai_commentary')
+          .select('*')
+          .eq('document_id', doc.id);
+        
+        return {
+          documentId: doc.id,
+          title: doc.title,
+          filename: doc.filename,
+          fileType: doc.file_type?.toUpperCase() || 'UNKNOWN',
+          textSections: (textSections || []).map((section: any) => ({
+            id: section.id,
+            content: section.content,
+            contentLength: section.content.length,
+            pageNumber: section.page_number,
+            sectionTitle: section.section_title
+          })),
+          aiCommentary: aiCommentary || [],
+          createdAt: doc.created_at,
+          pageCount: doc.page_count
+        };
+      })
+    );
+    
+    console.log(`✅ Loaded ${documentsWithData.length} documents with ${documentsWithData.reduce((acc, doc) => acc + doc.textSections.length, 0)} text sections`);
+    
+    return {
+      success: true,
+      documents: documentsWithData,
+      count: documentsWithData.length
+    };
+    
+  } catch (error) {
+    console.error('❌ Failed to get documents for chat:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Belgeler getirilemedi',
+      documents: []
+    };
+  }
+});
+
+console.log('Supabase Chat Integration IPC handler registered');
 
 // Auth IPC handlers
 ipcMain.handle('auth:saveAuthInfo', async (event, authInfo: any) => {
@@ -2818,4 +3065,262 @@ console.log('- ollama:status');
 console.log('- ollama:start');
 console.log('- ollama:stop');
 console.log('- ollama:ensure-running');
+console.log('============================================');
+
+// =============================================================================
+// GROUP ANALYSIS SUPABASE HANDLERS
+// =============================================================================
+
+/**
+ * Initialize Group Analysis Supabase Service
+ */
+ipcMain.handle('group-analysis-supabase:initialize', async (event, { projectUrl, anonKey, projectId }) => {
+  try {
+    console.log('Initializing Group Analysis Supabase Service...');
+    console.log('Project URL:', projectUrl);
+    console.log('Project ID:', projectId);
+    
+    if (!groupAnalysisSupabaseService) {
+      groupAnalysisSupabaseService = new GroupAnalysisSupabaseService();
+    }
+    
+    // Pass projectId for dashboard URL construction
+    const result = await groupAnalysisSupabaseService.initialize(projectUrl, anonKey, projectId);
+    
+    console.log('Group Analysis Supabase Service initialization result:', result);
+    
+    // If tables don't exist, return setup instructions (same as single document upload)
+    if (result.needsManualSetup) {
+      console.log('📋 Tables not found, returning setup instructions to renderer');
+      return {
+        success: false,
+        error: result.error,
+        needsManualSetup: true,
+        createTablesSQL: result.createTablesSQL,
+        dashboardUrl: result.dashboardUrl
+      };
+    }
+    
+    return result;
+    
+  } catch (error) {
+    console.error('Failed to initialize Group Analysis Supabase Service:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Transfer Group Analysis Data to Supabase
+ */
+ipcMain.handle('group-analysis-supabase:transfer', async (event, transferData) => {
+  try {
+    console.log('🚀 IPC: Transferring group analysis data to Supabase...');
+    console.log('📊 IPC: Transfer data summary:', {
+      groupId: transferData.groupId,
+      groupName: transferData.groupName,
+      documentsCount: transferData.documents?.length || 0,
+      analysisResultsCount: transferData.analysisResults?.length || 0
+    });
+    
+    // Debug: Check transfer data structure
+    console.log('🔍 IPC: Transfer data structure check:', {
+      hasGroupId: !!transferData.groupId,
+      hasGroupName: !!transferData.groupName,
+      hasDocuments: !!transferData.documents,
+      hasAnalysisResults: !!transferData.analysisResults,
+      documentsType: typeof transferData.documents,
+      analysisResultsType: typeof transferData.analysisResults
+    });
+    
+    if (!groupAnalysisSupabaseService) {
+      console.error('❌ IPC: Group Analysis Supabase Service not initialized');
+      return {
+        success: false,
+        error: 'Group Analysis Supabase Service not initialized. Call initialize first.'
+      };
+    }
+    
+    console.log('🔧 IPC: Service status:', groupAnalysisSupabaseService.getStatus());
+    
+    if (!groupAnalysisSupabaseService.isReady()) {
+      console.error('❌ IPC: Group Analysis Supabase Service not ready');
+      return {
+        success: false,
+        error: 'Group Analysis Supabase Service not ready. Check initialization.'
+      };
+    }
+    
+    console.log('🔄 IPC: Calling groupAnalysisSupabaseService.transferGroupAnalysis...');
+    const result = await groupAnalysisSupabaseService.transferGroupAnalysis(transferData);
+    
+    console.log('📊 IPC: Group analysis transfer result:', result);
+    return result;
+    
+  } catch (error) {
+    console.error('💥 IPC: Failed to transfer group analysis data:', error);
+    console.error('🔍 IPC: Exception details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack?.substring(0, 500) : 'No stack trace'
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error during transfer'
+    };
+  }
+});
+
+/**
+ * Get Group Analysis Summary from Supabase
+ */
+ipcMain.handle('group-analysis-supabase:get-summary', async (event, { groupId }) => {
+  try {
+    console.log('Getting group analysis summary for group:', groupId);
+    
+    if (!groupAnalysisSupabaseService || !groupAnalysisSupabaseService.isReady()) {
+      return {
+        success: false,
+        error: 'Group Analysis Supabase Service not initialized or ready.'
+      };
+    }
+    
+    const result = await groupAnalysisSupabaseService.getGroupAnalysisSummary(groupId);
+    
+    console.log('Group analysis summary result:', result);
+    return result;
+    
+  } catch (error) {
+    console.error('Failed to get group analysis summary:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Get User Groups from Supabase
+ */
+ipcMain.handle('group-analysis-supabase:get-user-groups', async (event, { userId }) => {
+  try {
+    console.log('Getting user groups for user:', userId || 'anonymous');
+    
+    if (!groupAnalysisSupabaseService || !groupAnalysisSupabaseService.isReady()) {
+      return {
+        success: false,
+        error: 'Group Analysis Supabase Service not initialized or ready.'
+      };
+    }
+    
+    const result = await groupAnalysisSupabaseService.getUserGroups(userId);
+    
+    console.log('User groups result:', result);
+    return result;
+    
+  } catch (error) {
+    console.error('Failed to get user groups:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Get Group Analysis Results from Supabase
+ */
+ipcMain.handle('group-analysis-supabase:get-analysis-results', async (event, { groupId }) => {
+  try {
+    console.log('Getting group analysis results for group:', groupId);
+    
+    if (!groupAnalysisSupabaseService || !groupAnalysisSupabaseService.isReady()) {
+      return {
+        success: false,
+        error: 'Group Analysis Supabase Service not initialized or ready.'
+      };
+    }
+    
+    const result = await groupAnalysisSupabaseService.getGroupAnalysisResults(groupId);
+    
+    console.log('Group analysis results:', result);
+    return result;
+    
+  } catch (error) {
+    console.error('Failed to get group analysis results:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Delete Group from Supabase
+ */
+ipcMain.handle('group-analysis-supabase:delete-group', async (event, { groupId }) => {
+  try {
+    console.log('Deleting group from Supabase:', groupId);
+    
+    if (!groupAnalysisSupabaseService || !groupAnalysisSupabaseService.isReady()) {
+      return {
+        success: false,
+        error: 'Group Analysis Supabase Service not initialized or ready.'
+      };
+    }
+    
+    const result = await groupAnalysisSupabaseService.deleteGroup(groupId);
+    
+    console.log('Group deletion result:', result);
+    return result;
+    
+  } catch (error) {
+    console.error('Failed to delete group:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+/**
+ * Get Group Analysis Supabase Service Status
+ */
+ipcMain.handle('group-analysis-supabase:get-status', async () => {
+  try {
+    if (!groupAnalysisSupabaseService) {
+      return {
+        initialized: false,
+        ready: false,
+        error: 'Service not created'
+      };
+    }
+    
+    const status = groupAnalysisSupabaseService.getStatus();
+    return {
+      ...status,
+      error: null
+    };
+    
+  } catch (error) {
+    console.error('Failed to get service status:', error);
+    return {
+      initialized: false,
+      ready: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+console.log('============================================');
+console.log('Group Analysis Supabase IPC Handlers:');
+console.log('- group-analysis-supabase:initialize');
+console.log('- group-analysis-supabase:transfer');
+console.log('- group-analysis-supabase:get-summary');
+console.log('- group-analysis-supabase:get-user-groups');
+console.log('- group-analysis-supabase:get-analysis-results');
+console.log('- group-analysis-supabase:delete-group');
+console.log('- group-analysis-supabase:get-status');
 console.log('============================================');

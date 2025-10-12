@@ -1,19 +1,20 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Create a Supabase client using the user's access token
+ * Create a Supabase client using the user's access token and anon key
  * This provides proper authentication for database operations
  */
-export const getSupabaseClient = (accessToken: string, projectUrl: string): SupabaseClient => {
-  // Use a placeholder anon key - you need to replace this with the real anon key from Supabase Dashboard
-  // Go to Supabase Dashboard > Settings > API > Project API keys > anon public
-  const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3ZXpneXFva255Z3BiY2ZwbmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU5MDAwMDAsImV4cCI6MjA1MTQ3NjAwMH0.REPLACE_WITH_REAL_ANON_KEY';
-  
+export const getSupabaseClient = (accessToken: string, projectUrl: string, anonKey: string): SupabaseClient => {
   console.log('🔑 Creating Supabase client with:', {
     projectUrl,
     accessTokenPreview: accessToken ? accessToken.substring(0, 20) + '...' : 'null',
-    usingAnonKey: anonKey.includes('REPLACE_WITH_REAL_ANON_KEY') ? 'PLACEHOLDER' : 'REAL'
+    anonKeyPreview: anonKey ? anonKey.substring(0, 20) + '...' : 'null',
+    hasAnonKey: !!anonKey
   });
+  
+  if (!anonKey || anonKey.trim().length === 0) {
+    throw new Error('Anon key is required. Please provide a valid anon key from Supabase Dashboard.');
+  }
   
   return createClient(projectUrl, anonKey, {
     global: { 
@@ -33,7 +34,11 @@ export const getSupabaseClient = (accessToken: string, projectUrl: string): Supa
 /**
  * Create a Supabase client for a specific project using stored OAuth tokens
  */
-export const createAuthenticatedSupabaseClient = async (projectId: string, projectUrl: string): Promise<SupabaseClient | null> => {
+export const createAuthenticatedSupabaseClient = async (
+  projectId: string, 
+  projectUrl: string,
+  anonKey?: string
+): Promise<SupabaseClient | null> => {
   try {
     const { getTokenStorage } = await import('./store');
     const tokenStorage = getTokenStorage();
@@ -44,28 +49,32 @@ export const createAuthenticatedSupabaseClient = async (projectId: string, proje
       return null;
     }
     
-    // Try to get anon key from token storage first
-    const authInfo = await tokenStorage.getAuthInfo();
-    const anonKey = authInfo?.anonKey;
+    // Use provided anon key, or try to get from storage
+    let finalAnonKey = anonKey;
     
-    if (anonKey) {
-      console.log('✅ Using stored anon key for Supabase authentication');
-      return createClient(projectUrl, anonKey, {
-        global: { 
-          headers: { 
-            Authorization: `Bearer ${tokens.accessToken}` 
-          } 
-        },
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          detectSessionInUrl: false
-        }
-      });
-    } else {
-      console.log('⚠️ No anon key found, using access token as anon key');
-      return getSupabaseClient(tokens.accessToken, projectUrl);
+    if (!finalAnonKey) {
+      const authInfo = await tokenStorage.getAuthInfo();
+      finalAnonKey = authInfo?.anonKey;
     }
+    
+    if (!finalAnonKey) {
+      console.error('❌ No anon key available. Please provide an anon key.');
+      throw new Error('Anon key is required for Supabase authentication. Please provide your project\'s anon key.');
+    }
+    
+    console.log('✅ Creating Supabase client with anon key for authentication');
+    return createClient(projectUrl, finalAnonKey, {
+      global: { 
+        headers: { 
+          Authorization: `Bearer ${tokens.accessToken}` 
+        } 
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
+      }
+    });
     
   } catch (error) {
     console.error('❌ Failed to create authenticated Supabase client:', error);

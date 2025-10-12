@@ -37,6 +37,12 @@ export function AnalysisResultsPage() {
   const [copiedText, setCopiedText] = useState<string | null>(null)
   const [isUploadingToSupabase, setIsUploadingToSupabase] = useState(false)
   const [isSavingToLocalStorage, setIsSavingToLocalStorage] = useState(false)
+  const [showAnonKeyDialog, setShowAnonKeyDialog] = useState(false)
+  const [anonKeyInput, setAnonKeyInput] = useState('')
+  const [selectedProjectForUpload, setSelectedProjectForUpload] = useState<any>(null)
+  const [showSqlSetupDialog, setShowSqlSetupDialog] = useState(false)
+  const [sqlToSetup, setSqlToSetup] = useState('')
+  const [dashboardUrl, setDashboardUrl] = useState('')
 
   const documentId = searchParams.get('documentId')
 
@@ -120,7 +126,7 @@ export function AnalysisResultsPage() {
       console.log('📦 Stored login data:', storedLogin)
       
       if (!storedLogin) {
-        throw new Error('No Supabase project selected. Please login and select a project first.')
+        throw new Error('Lütfen önce Supabase projesi seçin. Settings > Supabase bölümünden giriş yapabilirsiniz.')
       }
 
       const loginData = JSON.parse(storedLogin)
@@ -128,36 +134,115 @@ export function AnalysisResultsPage() {
       console.log('🎯 Selected project:', selectedProject)
       
       if (!selectedProject) {
-        throw new Error('No Supabase project selected. Please select a project first.')
+        throw new Error('Lütfen bir Supabase projesi seçin. Settings > Supabase bölümünden proje seçebilirsiniz.')
       }
 
-      // Pass the selected project along with the analysis result
-      console.log('📤 Calling uploadAnalysisToSupabase with data:', {
-        ...analysisResult,
-        selectedProject
+      // Check if we have anon key and project URL
+      let anonKey = loginData.anonKey
+      let projectUrl = selectedProject.project_api_url || `https://${selectedProject.id}.supabase.co`
+
+      console.log('🔍 Debug - anonKey from localStorage:', anonKey ? `${anonKey.substring(0, 30)}...` : 'MISSING')
+      console.log('🔍 Debug - anonKey length:', anonKey ? anonKey.length : 0)
+      console.log('🔍 Debug - anonKey type:', typeof anonKey)
+      console.log('🔍🔍🔍 RENDERER: FULL ANON KEY (first 100 chars):', anonKey ? anonKey.substring(0, 100) : 'MISSING')
+      console.log('🔍🔍🔍 RENDERER: FULL ANON KEY (last 50 chars):', anonKey ? anonKey.substring(anonKey.length - 50) : 'MISSING')
+      console.log('🔍🔍🔍 RENDERER: JWT Parts:', anonKey ? anonKey.split('.').map((part: string, i: number) => `Part ${i+1}: ${part.substring(0, 20)}...`) : 'NULL')
+
+      // If missing, ask user for credentials via dialog
+      if (!anonKey || anonKey.trim().length === 0) {
+        console.log('⚠️ Anon key missing or empty, opening dialog')
+        setSelectedProjectForUpload(selectedProject)
+        setShowAnonKeyDialog(true)
+        setIsUploadingToSupabase(false)
+        
+        // Dialog içinde "API Keys Sayfasını Aç" butonu var, otomatik açmaya gerek yok
+        console.log('📋 Anon key dialog opened - user will manually open API Keys page')
+        
+        return
+      }
+
+      // Validate anon key format before sending
+      const jwtParts = anonKey.split('.')
+      if (jwtParts.length !== 3) {
+        console.error('❌ Invalid anon key format:', jwtParts.length, 'parts found')
+        toast({
+          title: 'Geçersiz Anon Key',
+          description: `Anon Key formatı hatalı (${jwtParts.length} parça). Lütfen Settings'den anon key'i tekrar girin.`,
+          variant: 'destructive'
+        })
+        setIsUploadingToSupabase(false)
+        return
+      }
+
+      console.log('✅ Anon key validated, sending to main process')
+
+      // Verify project URL
+      if (!projectUrl || projectUrl === 'undefined') {
+        projectUrl = `https://${selectedProject.id}.supabase.co`
+        
+        // Save the corrected URL
+        selectedProject.project_api_url = projectUrl
+        loginData.selectedProject = selectedProject
+        localStorage.setItem('supabase-login', JSON.stringify(loginData))
+        console.log('✅ Project URL corrected and saved:', projectUrl)
+      }
+
+      console.log('📤 Calling supabase:uploadAnalysis IPC with data:', {
+        documentId: analysisResult.documentId,
+        title: analysisResult.title,
+        projectName: selectedProject.name,
+        projectUrl,
+        hasAnonKey: !!anonKey,
+        anonKeyPreview: anonKey ? `${anonKey.substring(0, 30)}...` : 'MISSING',
+        anonKeyLength: anonKey ? anonKey.length : 0
       })
       
-      // TODO: Implement uploadAnalysisToSupabase in electronAPI
-      // For now, show success message
-      const result = {
-        success: true,
-        projectName: selectedProject.name,
-        textSectionsCount: analysisResult.textSections?.length || 0,
-        commentaryCount: analysisResult.aiCommentary?.length || 0
-      }
+      const trimmedKey = anonKey.trim();
+      console.log('🔑🔑🔑 RENDERER: Trimmed key parts:', trimmedKey.split('.').length);
+      console.log('🔑🔑🔑 RENDERER: Trimmed key length:', trimmedKey.length);
+      console.log('🔑🔑🔑 RENDERER: Trimmed key first 100:', trimmedKey.substring(0, 100));
+      
+      const dataToSend = {
+        ...analysisResult,
+        selectedProject,
+        anonKey: trimmedKey,
+        projectUrl
+      };
+      
+      console.log('🔑🔑🔑 RENDERER: Data to send - anonKey length:', dataToSend.anonKey.length);
+      console.log('🔑🔑🔑 RENDERER: Data to send - anonKey parts:', dataToSend.anonKey.split('.').length);
+      
+      // Call the real IPC handler
+      const result = await (window.electronAPI as any).uploadAnalysisToSupabase(dataToSend)
       
       console.log('📥 Upload result:', result)
       
       if (result.success) {
         toast({
-          title: 'Supabase Aktarımı Başarılı',
+          title: '✅ Supabase Aktarımı Başarılı',
           description: `"${analysisResult.title}" başarıyla ${result.projectName} projesine aktarıldı. ${result.textSectionsCount} metin bölümü ve ${result.commentaryCount} AI yorumu kaydedildi.`,
         })
+      } else if (result.needsManualSetup && result.createTablesSQL) {
+        // Special case: Tables don't exist, show SQL setup dialog
+        console.log('📋 Opening SQL setup dialog');
+        
+        setSqlToSetup(result.createTablesSQL);
+        setDashboardUrl(result.dashboardUrl);
+        setShowSqlSetupDialog(true);
+        
+        // Also show in console for easy copying
+        console.log('='.repeat(80));
+        console.log('📋 SUPABASE SETUP SQL:');
+        console.log('='.repeat(80));
+        console.log(result.createTablesSQL);
+        console.log('='.repeat(80));
+        console.log(`🔗 Dashboard URL: ${result.dashboardUrl}`);
+        console.log('='.repeat(80));
       } else {
-        throw new Error('Upload failed')
+        throw new Error(result.error || 'Upload failed')
       }
     } catch (error) {
-      console.error('Supabase upload failed:', error)
+      console.error('❌ Supabase upload failed:', error)
       toast({
         title: 'Aktarım Hatası',
         description: error instanceof Error ? error.message : 'Supabase\'e aktarım sırasında bir hata oluştu.',
@@ -165,6 +250,68 @@ export function AnalysisResultsPage() {
       })
     } finally {
       setIsUploadingToSupabase(false)
+    }
+  }
+
+  const handleAnonKeySubmit = async () => {
+    const trimmedKey = anonKeyInput.trim()
+    
+    if (!trimmedKey || trimmedKey.length === 0) {
+      toast({
+        title: 'Hata',
+        description: 'Lütfen geçerli bir Anon Key girin.',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    // Validate JWT format (should have 3 parts separated by dots)
+    const jwtParts = trimmedKey.split('.')
+    if (jwtParts.length !== 3) {
+      toast({
+        title: 'Geçersiz Anon Key',
+        description: `Anon Key formatı hatalı. JWT 3 parçadan oluşmalı (örn: eyJhbG...xyz.abc). Girdiğiniz değer ${jwtParts.length} parça içeriyor. Lütfen key'in tamamını kopyaladığınızdan emin olun.`,
+        variant: 'destructive'
+      })
+      return
+    }
+
+    // Validate that it starts with "eyJ" (common JWT header)
+    if (!trimmedKey.startsWith('eyJ')) {
+      toast({
+        title: 'Geçersiz Anon Key',
+        description: 'Anon Key genellikle "eyJ" ile başlar. Lütfen doğru key\'i kopyaladığınızdan emin olun.',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    try {
+      // Save anon key to localStorage
+      const storedLogin = localStorage.getItem('supabase-login')
+      if (storedLogin) {
+        const loginData = JSON.parse(storedLogin)
+        loginData.anonKey = trimmedKey
+        localStorage.setItem('supabase-login', JSON.stringify(loginData))
+        console.log('✅ Anon key saved to localStorage')
+        console.log('🔑 Key preview:', trimmedKey.substring(0, 30) + '...')
+      }
+
+      // Close dialog and retry upload
+      setShowAnonKeyDialog(false)
+      setAnonKeyInput('')
+      
+      toast({
+        title: '✅ Anon Key Kaydedildi',
+        description: 'Şimdi tekrar "Supabase\'e Aktar" butonuna tıklayın.',
+      })
+    } catch (error) {
+      console.error('Failed to save anon key:', error)
+      toast({
+        title: 'Kaydetme Hatası',
+        description: 'Anon key kaydedilemedi.',
+        variant: 'destructive'
+      })
     }
   }
 
@@ -698,6 +845,239 @@ export function AnalysisResultsPage() {
           </div>
         )}
       </div>
+
+      {/* SQL Setup Dialog */}
+      {showSqlSetupDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-4xl p-6 bg-white max-h-[90vh] overflow-y-auto">
+            <div className="space-y-4">
+              <div className="flex items-start space-x-3">
+                <AlertCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-1" />
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    📋 Supabase Tabloları Kurulmalı
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Supabase projenizde <strong>documents</strong> tablosu bulunamadı. 
+                    Verileri kaydedebilmek için aşağıdaki SQL'i çalıştırmanız gerekiyor.
+                  </p>
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-start space-x-2">
+                      <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="font-medium text-blue-900 mb-2">✨ Hızlı Kurulum Adımları</h4>
+                        <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
+                          <li>
+                            Aşağıdaki <strong>"SQL'i Kopyala"</strong> butonuna tıklayın
+                          </li>
+                          <li>
+                            <strong>"Supabase SQL Editor'ı Aç"</strong> butonuna tıklayın
+                          </li>
+                          <li>
+                            Açılan sayfada <strong>"New query"</strong> butonuna tıklayın
+                          </li>
+                          <li>
+                            SQL editörüne <strong>Ctrl+V</strong> ile yapıştırın
+                          </li>
+                          <li>
+                            <strong>"RUN"</strong> butonuna tıklayın (veya Ctrl+Enter)
+                          </li>
+                          <li>
+                            Bu dialog'u kapatıp <strong>"Supabase'e Aktar"</strong> butonuna tekrar tıklayın
+                          </li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-medium text-gray-700">
+                        SQL Kodu (Otomatik Oluşturuldu)
+                      </label>
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(sqlToSetup);
+                            toast({
+                              title: '✅ SQL Kopyalandı',
+                              description: 'SQL panoya kopyalandı. Şimdi Supabase SQL Editor\'ı açın.',
+                            });
+                          } catch (error) {
+                            toast({
+                              title: 'Kopyalama Hatası',
+                              description: 'SQL kopyalanamadı.',
+                              variant: 'destructive'
+                            });
+                          }
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        SQL'i Kopyala
+                      </Button>
+                    </div>
+                    
+                    <div className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 overflow-y-auto">
+                      <pre className="text-xs font-mono whitespace-pre">{sqlToSetup}</pre>
+                    </div>
+
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <div className="flex items-start space-x-2">
+                        <Info className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        <div className="text-xs text-yellow-800">
+                          <strong>Not:</strong> Bu SQL, RLS (Row Level Security) politikalarını devre dışı bırakır. 
+                          Üretim ortamında güvenlik politikaları eklemeyi unutmayın!
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowSqlSetupDialog(false);
+                    setSqlToSetup('');
+                    setDashboardUrl('');
+                  }}
+                >
+                  Kapat
+                </Button>
+                <Button
+                  onClick={() => {
+                    // Open Supabase SQL Editor
+                    window.open(dashboardUrl, '_blank');
+                    toast({
+                      title: '🌐 SQL Editor Açıldı',
+                      description: 'SQL\'i kopyalayıp yeni sekmede çalıştırın.',
+                    });
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2 transform rotate-180" />
+                  Supabase SQL Editor'ı Aç
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Anon Key Dialog */}
+      {showAnonKeyDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-2xl p-6 bg-white">
+            <div className="space-y-4">
+              <div className="flex items-start space-x-3">
+                <AlertCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-1" />
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Supabase Anon Key Gerekli
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Verileri Supabase'e yüklemek için projenizin <strong>Anon Key</strong>'ine ihtiyacımız var.
+                    {selectedProjectForUpload && (
+                      <span className="block mt-1">
+                        Proje: <strong>{selectedProjectForUpload.name}</strong>
+                      </span>
+                    )}
+                  </p>
+                  
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <h4 className="font-medium text-blue-900">📝 Anon Key'i Kopyalayın</h4>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const apiUrl = selectedProjectForUpload 
+                            ? `https://supabase.com/dashboard/project/${selectedProjectForUpload.id}/settings/api`
+                            : 'https://supabase.com/dashboard';
+                          window.open(apiUrl, '_blank');
+                          toast({
+                            title: '🌐 API Keys Sayfası Açıldı',
+                            description: 'Anon key\'i kopyalayın ve buraya yapıştırın.',
+                          });
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                      >
+                        <ArrowLeft className="h-3 w-3 mr-1 transform rotate-180" />
+                        API Keys Sayfasını Aç
+                      </Button>
+                    </div>
+                    <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
+                      <li>
+                        <strong>"API Keys Sayfasını Aç"</strong> butonuna tıklayın
+                      </li>
+                      <li>
+                        Açılan sayfada <strong>"Project API keys"</strong> bölümünü bulun
+                      </li>
+                      <li>
+                        <strong>"anon" "public"</strong> etiketli key'i kopyalayın
+                        <span className="block text-xs text-blue-600 mt-1 ml-5">
+                          (Genellikle "eyJhbGc..." ile başlar)
+                        </span>
+                      </li>
+                      <li>
+                        Aşağıdaki input field'a yapıştırın
+                      </li>
+                    </ol>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Anon Key
+                    </label>
+                    <textarea
+                      value={anonKeyInput}
+                      onChange={(e) => setAnonKeyInput(e.target.value)}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl..."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-xs resize-none"
+                    />
+                    <div className="flex items-start space-x-2 text-xs text-gray-600">
+                      <Info className="h-4 w-4 flex-shrink-0 mt-0.5 text-blue-500" />
+                      <div>
+                        <p className="font-medium text-gray-700">Önemli:</p>
+                        <ul className="list-disc list-inside space-y-1 mt-1">
+                          <li>"anon" "public" key'i kopyalayın (service_role DEĞİL!)</li>
+                          <li>Key'in tamamını kopyaladığınızdan emin olun</li>
+                          <li>Key "eyJ" ile başlamalı ve 3 parçadan oluşmalı (nokta ile ayrılmış)</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowAnonKeyDialog(false)
+                    setAnonKeyInput('')
+                    setSelectedProjectForUpload(null)
+                  }}
+                >
+                  İptal
+                </Button>
+                <Button
+                  onClick={handleAnonKeySubmit}
+                  disabled={!anonKeyInput || anonKeyInput.trim().length === 0}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Kaydet ve Devam Et
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
