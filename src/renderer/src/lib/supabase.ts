@@ -23,6 +23,26 @@ const loadSupabaseConfig = async () => {
 // Initialize config on module load
 loadSupabaseConfig();
 
+// Function to update Supabase client with new URL and key
+export const updateSupabaseConfig = async (url: string, anonKey: string) => {
+  supabaseUrl = url;
+  supabaseAnonKey = anonKey;
+  
+  // Recreate the client with new config
+  const newClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true
+    }
+  });
+  
+  // Update the exported client
+  Object.assign(supabase, newClient);
+  
+  console.log('✅ Supabase client updated with new config:', { url, anonKey: anonKey.substring(0, 20) + '...' });
+};
+
 // For development, you can use these demo credentials:
 // URL: https://demo.supabase.co
 // Key: demo-key

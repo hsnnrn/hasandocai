@@ -60,8 +60,8 @@ export class ExcelAnalysisService {
         this.supabase = createClient(supabaseUrl, supabaseKey);
         this.isInitialized = true;
       } else {
-        // Fallback to environment variables or mock
-        const supabaseUrl = process.env.SUPABASE_URL || 'https://nhkaadtyqppnmbymufky.supabase.co';
+        // Fallback to environment variables or dynamic config
+        const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project-ref.supabase.co';
         const supabaseKey = process.env.SUPABASE_ANON_KEY || 'YOUR_REAL_SUPABASE_API_KEY_HERE';
         
         console.log('ExcelAnalysisService: No OAuth project selected, using fallback');
