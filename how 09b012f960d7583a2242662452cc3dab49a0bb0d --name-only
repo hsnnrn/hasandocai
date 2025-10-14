@@ -1,0 +1,10 @@
+[33m2e28786[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/feature/mistral-chatbot-deep[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mfeature/mistral-chatbot-deep[m[33m)[m Supabase entegrasyonları ai optimizasyonları entegre edildi- kalan kısım grup analizlerinin supabase aktarılması ve mac için open win kısmının crosa uyarlanması
+[33mafb0ec1[m config: Add Supabase credentials for private repo - Update .gitignore to allow .env in private repo - Add config.private.env with credentials - Add comprehensive backup guide (SUPABASE_CONFIG_BACKUP_GUIDE.md)
+[33m39ddb73[m docs: Add comprehensive Supabase configuration backup and restore guide
+[33m343e489[m feat: Add Supabase group analysis integration and update UI - Remove user email display from header - Add GroupAnalysisSupabaseService for document processing - Add GroupAnalysisSupabaseSetupModal for project configuration - Add LoginPage for Supabase authentication - Update SQL schemas with unified document analysis - Add comprehensive setup guides (HIZLI_KURULUM.md, SETUP_INSTRUCTIONS.md)
+[33m9e30c50[m[33m ([m[1;31mhasandocai/feature/mistral-chatbot-deep[m[33m)[m Complete project backup with all features and documentation
+[33m86af424[m test: Configure ts-jest and fix all deep analysis tests
+[33m8fbb470[m feat: Add Deep Analysis Pipeline with Multi-Pass Reasoning and Critic Verification
+[33m45cf6dd[m[33m ([m[1;31morigin/feature/mistral-chatbot-rag[m[33m, [m[1;31mhasandocai/main[m[33m, [m[1;31mhasandocai/feature/mistral-chatbot-rag[m[33m, [m[1;32mfeature/mistral-chatbot-rag[m[33m)[m BGE m3 Optimizasyonu yapıldı
+[33m09b012f[m Emmbeded AI ile entegrasyon saÄŸlandÄ±
+[33m46d4353[m Supabase entegrasyonları tamamlandı

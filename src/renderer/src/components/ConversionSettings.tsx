@@ -230,21 +230,13 @@ export function ConversionSettings() {
     }
   }, [])
 
-  // Set default output directory
+  // Set default output directory to Desktop
   useEffect(() => {
     if (!conversionSettings.outputDirectory) {
-      // Get default path from main process
-      if ((window as any).electronAPI) {
-        (window as any).electronAPI.getDefaultDirectory().then((defaultPath: string) => {
-          setConversionSettings({ outputDirectory: defaultPath })
-        }).catch(() => {
-          // Fallback if main process is not available
-          setConversionSettings({ outputDirectory: 'Documents/DocData' })
-        })
-      } else {
-        // Fallback if electron API is not available
-        setConversionSettings({ outputDirectory: 'Documents/DocData' })
-      }
+      // Set desktop as default (cross-platform)
+      const isWindows = navigator.platform.toLowerCase().includes('win')
+      const desktopPath = isWindows ? 'Desktop' : 'Desktop'
+      setConversionSettings({ outputDirectory: desktopPath })
     }
   }, [])
 
@@ -289,9 +281,10 @@ export function ConversionSettings() {
             if ((result as any).autoSavePath) {
               toast({
                 title: 'File converted and saved',
-                description: `Saved to ${(result as any).autoSavePath}`,
+                description: `Saved to Desktop: ${(result as any).autoSavePath.split('\\').pop() || (result as any).autoSavePath.split('/').pop()}`,
               })
             }
+            
             updateFile(file.id, { 
               status: 'completed', 
               progress: 100,
@@ -452,38 +445,24 @@ export function ConversionSettings() {
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <FolderOpen className="h-5 w-5" />
-            <span>Output Directory</span>
+            <span>Save Location</span>
           </CardTitle>
           <CardDescription>
-            Choose where to save converted files
+            Converted files are automatically saved to your Desktop
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex space-x-2">
-            <input
-              type="text"
-              value={conversionSettings.outputDirectory || ''}
-              onChange={(e) => setConversionSettings({ outputDirectory: e.target.value })}
-              placeholder="Select output directory..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-            <Button
-              onClick={async () => {
-                if ((window as any).electronAPI) {
-                  const result = await (window as any).electronAPI.selectDirectory();
-                  if (result) {
-                    setConversionSettings({ outputDirectory: result });
-                  }
-                }
-              }}
-              variant="outline"
-              size="sm"
-            >
-              Browse
-            </Button>
+          <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            <div>
+              <div className="font-medium text-green-800">Auto-save to Desktop</div>
+              <div className="text-sm text-green-600">
+                Files will be saved as: filename_converted.ext
+              </div>
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Default: Documents/DocData folder
+            No additional setup required - files are automatically saved to your Desktop folder
           </p>
         </CardContent>
       </Card>

@@ -1688,9 +1688,97 @@ ipcMain.handle('file:open', async (event) => {
 
 ipcMain.handle('file:process', async (event, filePath: string, options: any) => {
   try {
-    // This would be implemented based on your file processing logic
     console.log('Processing file:', filePath, 'with options:', options);
-    return { success: true, message: 'File processed successfully' };
+    
+    // Import and use the actual FileProcessingService
+    const { FileProcessingService } = await import('./services/FileProcessingService');
+    const processingService = new FileProcessingService();
+    
+    // Convert options to match FileProcessingService interface
+    const conversionOptions = {
+      outputFormat: (options.iLovePDFTool?.includes('pdf_to_docx') ? 'docx' : 
+                   options.iLovePDFTool?.includes('docx_to_pdf') ? 'pdf' : 
+                   options.iLovePDFTool?.includes('pdf_to_csv') ? 'csv' : 
+                   options.iLovePDFTool?.includes('csv_to_docx') ? 'docx' :
+                   options.iLovePDFTool?.includes('csv_to_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('docx_to_csv') ? 'csv' :
+                   options.iLovePDFTool?.includes('xlsx_to_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('xlsx_to_docx') ? 'docx' :
+                   options.iLovePDFTool?.includes('xlsx_to_csv') ? 'csv' :
+                   options.iLovePDFTool?.includes('pptx_to_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('pptx_to_docx') ? 'docx' :
+                   options.iLovePDFTool?.includes('jpg_to_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('png_to_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('gif_to_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('bmp_to_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('compress_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('merge_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('split_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('watermark_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('unlock_pdf') ? 'pdf' :
+                   options.iLovePDFTool?.includes('pdf_to_searchable') ? 'pdf' : 'pdf') as 'pdf' | 'docx' | 'csv',
+      quality: options.quality || 'medium',
+      preserveFormatting: options.preserveFormatting || true,
+      ocrEnabled: options.ocrEnabled || false,
+      mergeFiles: options.mergeFiles || false
+    };
+    
+    console.log('Converted options:', conversionOptions);
+    
+    // Process the file using the real service
+    const result = await processingService.processFile(filePath, conversionOptions);
+    
+    if (result.success) {
+      console.log('File processing completed successfully');
+      
+      // Auto-save the file to desktop (cross-platform)
+      let autoSavePath: string | null = null;
+      if (result.data) {
+        try {
+          const fs = await import('fs/promises');
+          const path = await import('path');
+          const { homedir } = await import('os');
+          
+          // Get desktop path (cross-platform)
+          const desktopPath = path.join(homedir(), 'Desktop');
+          
+          // Ensure desktop directory exists
+          await fs.mkdir(desktopPath, { recursive: true });
+          
+          // Generate output filename
+          const originalName = path.basename(filePath);
+          const nameWithoutExt = path.parse(originalName).name;
+          const outputExt = conversionOptions.outputFormat === 'docx' ? '.docx' : 
+                           conversionOptions.outputFormat === 'csv' ? '.csv' : '.pdf';
+          
+          const outputFileName = `${nameWithoutExt}_converted${outputExt}`;
+          const fullOutputPath = path.join(desktopPath, outputFileName);
+          
+          // Write the converted file
+          await fs.writeFile(fullOutputPath, result.data);
+          autoSavePath = fullOutputPath;
+          
+          console.log('File auto-saved to desktop:', autoSavePath);
+        } catch (autoSaveError) {
+          console.error('Auto-save failed:', autoSaveError);
+        }
+      }
+      
+      return {
+        success: true,
+        message: 'File processed successfully',
+        outputPath: result.outputPath,
+        outputExtension: `.${conversionOptions.outputFormat}`,
+        autoSavePath: autoSavePath,
+        metadata: result.metadata
+      };
+    } else {
+      console.error('File processing failed:', result.error);
+      return {
+        success: false,
+        error: result.error || 'File processing failed'
+      };
+    }
   } catch (error) {
     console.error('Error processing file:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Failed to process file' };
