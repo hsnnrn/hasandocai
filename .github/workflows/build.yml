@@ -1,0 +1,30 @@
+name: Build macOS Installer and Release
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build (electron-builder)
+        run: yarn dist
+
+      - name: Create GitHub Release & Upload DMG
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
