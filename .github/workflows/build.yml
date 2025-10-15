@@ -1,4 +1,4 @@
-name: Build macOS Installer and Release
+name: Build Installers and Release
 
 on:
   push:
@@ -19,12 +19,60 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Build (electron-builder)
-        run: yarn dist
+      - name: Build macOS (electron-builder)
+        run: yarn dist:mac
 
-      - name: Create GitHub Release & Upload DMG
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: dist/*.dmg
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build Windows (electron-builder)
+        run: yarn dist:win
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/*.exe
+
+  release:
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-installer
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+
+      - name: Create GitHub Release & Upload Installers
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/*.dmg
+          files: |
+            *.dmg
+            *.exe
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
