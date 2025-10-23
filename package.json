@@ -1,6 +1,6 @@
 {
   "name": "doc-ai-production",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Minimal Electron app for DocAI production builds",
   "main": "dist/main/main/main.js",
   "author": "hasan",
