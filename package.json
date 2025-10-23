@@ -2,7 +2,7 @@
   "name": "doc-ai-production",
   "version": "0.1.4",
   "description": "Minimal Electron app for DocAI production builds",
-  "main": "dist/main/main.js",
+  "main": "dist/main/main/main.js",
   "author": "hasan",
   "license": "MIT",
   "scripts": {
