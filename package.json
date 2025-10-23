@@ -1,8 +1,8 @@
 {
   "name": "doc-ai-production",
-  "version": "0.1.5",
+  "version": "0.1.4",
   "description": "Minimal Electron app for DocAI production builds",
-  "main": "dist/main/main/main.js",
+  "main": "dist/main/main.js",
   "author": "hasan",
   "license": "MIT",
   "scripts": {
@@ -23,7 +23,6 @@
     "release:patch": "npm version patch && git push && git push --tags",
     "release:minor": "npm version minor && git push && git push --tags",
     "release:major": "npm version major && git push && git push --tags",
-    "postinstall": "electron-builder install-app-deps",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {
@@ -84,19 +83,15 @@
     "appId": "com.hsnnrn.docaiproduction",
     "productName": "DocAiProduction",
     "copyright": "Copyright © 2024 hsnnrn",
+    "npmRebuild": false,
+    "buildDependenciesFromSource": false,
     "directories": {
       "output": "dist"
     },
     "files": [
-      "**/*",
-      "!node_modules",
-      "!dist",
-      "!build",
-      "!.git",
-      "!*.md",
-      "!.github",
-      "!tests",
-      "!temp"
+      "dist/main/**/*",
+      "dist/renderer/**/*",
+      "package.json"
     ],
     "extraResources": [],
     "publish": {
