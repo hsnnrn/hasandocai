@@ -96,8 +96,8 @@
     "extraResources": [],
     "publish": {
       "provider": "github",
-      "owner": "hsnnrn",
-      "repo": "DocAiProduction"
+      "owner": "turkishdeepkebab",
+      "repo": "Docdataapp"
     },
     "mac": {
       "target": [
@@ -183,10 +183,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/hsnnrn/DocAiProduction.git"
+    "url": "https://github.com/turkishdeepkebab/Docdataapp.git"
   },
-  "homepage": "https://github.com/hsnnrn/DocAiProduction#readme",
+  "homepage": "https://github.com/turkishdeepkebab/Docdataapp#readme",
   "bugs": {
-    "url": "https://github.com/hsnnrn/DocAiProduction/issues"
+    "url": "https://github.com/turkishdeepkebab/Docdataapp/issues"
   }
 }
