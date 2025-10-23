@@ -1,78 +1,337 @@
-name: Build Installers and Release
+name: Build and Release Electron App
 
 on:
   push:
-    branches: [ main ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type (patch, minor, major)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+
+env:
+  NODE_VERSION: '20'
+  ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+  ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
 
 jobs:
   build-mac:
     runs-on: macos-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup macOS build environment
+        run: |
+          # Install Xcode Command Line Tools if not present
+          xcode-select --install 2>/dev/null || true
+          
+          # Set up build environment
+          echo "ELECTRON_CACHE=${{ env.ELECTRON_CACHE }}" >> $GITHUB_ENV
+          echo "ELECTRON_BUILDER_CACHE=${{ env.ELECTRON_BUILDER_CACHE }}" >> $GITHUB_ENV
+
+      - name: Create cache directories
+        run: |
+          mkdir -p ${{ env.ELECTRON_CACHE }}
+          mkdir -p ${{ env.ELECTRON_BUILDER_CACHE }}
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: |
+          npm ci --prefer-offline --no-audit
+          npm run postinstall
 
-      - name: Build macOS (electron-builder)
-        run: yarn dist:mac
+      - name: Build macOS app
+        run: |
+          npm run dist:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload macOS artifact
+      - name: Create checksums for macOS
+        run: |
+          cd dist
+          find . -name "*.dmg" -exec shasum -a 256 {} \; > macos-checksums.txt
+          cat macos-checksums.txt
+
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-installer
-          path: dist/*.dmg
+          name: macos-build-${{ github.run_number }}
+          path: |
+            dist/*.dmg
+            dist/macos-checksums.txt
+          retention-days: 30
 
   build-windows:
     runs-on: windows-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Windows build environment
+        run: |
+          # Set up build environment
+          echo "ELECTRON_CACHE=${{ env.ELECTRON_CACHE }}" >> $env:GITHUB_ENV
+          echo "ELECTRON_BUILDER_CACHE=${{ env.ELECTRON_BUILDER_CACHE }}" >> $env:GITHUB_ENV
+
+      - name: Create cache directories
+        run: |
+          New-Item -ItemType Directory -Force -Path "${{ env.ELECTRON_CACHE }}"
+          New-Item -ItemType Directory -Force -Path "${{ env.ELECTRON_BUILDER_CACHE }}"
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: |
+          npm ci --prefer-offline --no-audit
+          npm run postinstall
 
-      - name: Build Windows (electron-builder)
-        run: yarn dist:win
+      - name: Build Windows app
+        run: |
+          npm run dist:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Windows artifact
+      - name: Create checksums for Windows
+        run: |
+          cd dist
+          Get-ChildItem -Path "*.exe" | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File -FilePath "windows-checksums.txt" -Append
+          }
+          Get-Content windows-checksums.txt
+
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
-          path: dist/*.exe
+          name: windows-build-${{ github.run_number }}
+          path: |
+            dist/*.exe
+            dist/windows-checksums.txt
+          retention-days: 30
 
-  release:
-    needs: [build-mac, build-windows]
+  build-linux:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
     steps:
-      - name: Download macOS artifact
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Linux build environment
+        run: |
+          # Install required dependencies
+          sudo apt-get update
+          sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libasound2
+          
+          # Set up build environment
+          echo "ELECTRON_CACHE=${{ env.ELECTRON_CACHE }}" >> $GITHUB_ENV
+          echo "ELECTRON_BUILDER_CACHE=${{ env.ELECTRON_BUILDER_CACHE }}" >> $GITHUB_ENV
+
+      - name: Create cache directories
+        run: |
+          mkdir -p ${{ env.ELECTRON_CACHE }}
+          mkdir -p ${{ env.ELECTRON_BUILDER_CACHE }}
+
+      - name: Install dependencies
+        run: |
+          npm ci --prefer-offline --no-audit
+          npm run postinstall
+
+      - name: Build Linux app
+        run: |
+          npm run build && electron-builder --linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create checksums for Linux
+        run: |
+          cd dist
+          find . -name "*.AppImage" -o -name "*.deb" | xargs -I {} shasum -a 256 {} > linux-checksums.txt
+          cat linux-checksums.txt
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build-${{ github.run_number }}
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/linux-checksums.txt
+          retention-days: 30
+
+  create-release:
+    needs: [build-mac, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
-          name: macos-installer
+          name: macos-build-${{ github.run_number }}
+          path: ./artifacts/macos
 
-      - name: Download Windows artifact
+      - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
-          name: windows-installer
+          name: windows-build-${{ github.run_number }}
+          path: ./artifacts/windows
 
-      - name: Create GitHub Release & Upload Installers
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-build-${{ github.run_number }}
+          path: ./artifacts/linux
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          # Get commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --oneline --no-merges)
+          else
+            COMMITS=$(git log $LAST_TAG..HEAD --oneline --no-merges)
+          fi
+          
+          # Create release notes
+          cat > release_notes.md << EOF
+          ## DocAiProduction v${{ steps.get_version.outputs.version }}
+          
+          ### 📦 Downloads
+          - **Windows**: Download the .exe installer
+          - **macOS**: Download the .dmg installer  
+          - **Linux**: Download the .AppImage or .deb package
+          
+          ### 🔧 Installation
+          1. Download the installer for your operating system
+          2. Run the installer and follow the setup wizard
+          3. Launch DocAiProduction from your applications menu
+          
+          ### 📋 Changes in this release:
+          \`\`\`
+          $COMMITS
+          \`\`\`
+          
+          ### 🔐 Verification
+          Verify the integrity of your download using the checksum files:
+          - Windows: \`windows-checksums.txt\`
+          - macOS: \`macos-checksums.txt\`
+          - Linux: \`linux-checksums.txt\`
+          
+          ### 🆘 Support
+          If you encounter any issues, please report them on our [GitHub Issues](https://github.com/hsnnrn/DocAiProduction/issues) page.
+          EOF
+          
+          # Output the release notes
+          echo "release_notes<<EOF" >> $GITHUB_OUTPUT
+          cat release_notes.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.get_version.outputs.tag }}
+          name: DocAiProduction v${{ steps.get_version.outputs.version }}
+          body: ${{ steps.release_notes.outputs.release_notes }}
+          draft: false
+          prerelease: false
           files: |
-            *.dmg
-            *.exe
-          tag_name: v${{ github.run_number }}
-          name: Release v${{ github.run_number }}
+            artifacts/macos/*.dmg
+            artifacts/macos/macos-checksums.txt
+            artifacts/windows/*.exe
+            artifacts/windows/windows-checksums.txt
+            artifacts/linux/*.AppImage
+            artifacts/linux/*.deb
+            artifacts/linux/linux-checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-readme:
+    needs: [create-release]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update README badges
+        run: |
+          # Update version badge in README
+          if [ -f README.md ]; then
+            sed -i "s/version-[^-]*-blue/version-v${{ steps.get_version.outputs.version }}-blue/g" README.md
+            sed -i "s/downloads-[^-]*-green/downloads-v${{ steps.get_version.outputs.version }}-green/g" README.md
+          fi
+
+      - name: Commit README updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git diff --staged --quiet || git commit -m "Update README badges for v${{ steps.get_version.outputs.version }}"
+          git push
+
+  cleanup:
+    needs: [create-release]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Cleanup old artifacts
+        run: |
+          echo "Cleaning up completed successfully"
+          echo "Build artifacts have been uploaded to GitHub Releases"
