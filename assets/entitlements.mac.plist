@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Required for hardened runtime -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    
+    <!-- Required for hardened runtime -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    
+    <!-- Required for hardened runtime -->
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+    
+    <!-- Required for hardened runtime -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    
+    <!-- Network access for AI features -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    
+    <!-- Network access for updates -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+    
+    <!-- File system access -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    
+    <!-- Downloads folder access -->
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+    
+    <!-- Documents folder access -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    
+    <!-- Camera access (if needed for document scanning) -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
+    
+    <!-- Microphone access (if needed for voice features) -->
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+    
+    <!-- Print access -->
+    <key>com.apple.security.print</key>
+    <true/>
+    
+    <!-- Accessibility access (if needed for automation) -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+    
+    <!-- App sandbox (if using sandbox) -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    
+    <!-- Outgoing network connections -->
+    <key>com.apple.security.network.outgoing</key>
+    <true/>
+    
+    <!-- Incoming network connections -->
+    <key>com.apple.security.network.incoming</key>
+    <true/>
+    
+    <!-- Temporary files -->
+    <key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
+    <array>
+        <string>/tmp/</string>
+        <string>/var/tmp/</string>
+    </array>
+    
+    <!-- Application support directory -->
+    <key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
+    <array>
+        <string>~/Library/Application Support/DocDataApp/</string>
+        <string>~/Library/Preferences/com.docdatai.app.plist</string>
+        <string>~/Library/Caches/com.docdatai.app/</string>
+        <string>~/Library/Logs/DocDataApp/</string>
+    </array>
+</dict>
+</plist>

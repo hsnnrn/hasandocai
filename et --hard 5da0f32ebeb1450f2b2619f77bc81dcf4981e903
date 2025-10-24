@@ -1,0 +1,513 @@
+[33m5da0f32[m 2025-01-27
+[1mdiff --git a/how 09b012f960d7583a2242662452cc3dab49a0bb0d --name-only b/how 09b012f960d7583a2242662452cc3dab49a0bb0d --name-only[m
+[1mnew file mode 100644[m
+[1mindex 0000000..bb1dd13[m
+[1m--- /dev/null[m
+[1m+++ b/how 09b012f960d7583a2242662452cc3dab49a0bb0d --name-only[m	
+[36m@@ -0,0 +1,10 @@[m
+[32m+[m[32m[33m2e28786[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/feature/mistral-chatbot-deep[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mfeature/mistral-chatbot-deep[m[33m)[m Supabase entegrasyonları ai optimizasyonları entegre edildi- kalan kısım grup analizlerinin supabase aktarılması ve mac için open win kısmının crosa uyarlanması[m
+[32m+[m[32m[33mafb0ec1[m config: Add Supabase credentials for private repo - Update .gitignore to allow .env in private repo - Add config.private.env with credentials - Add comprehensive backup guide (SUPABASE_CONFIG_BACKUP_GUIDE.md)[m
+[32m+[m[32m[33m39ddb73[m docs: Add comprehensive Supabase configuration backup and restore guide[m
+[32m+[m[32m[33m343e489[m feat: Add Supabase group analysis integration and update UI - Remove user email display from header - Add GroupAnalysisSupabaseService for document processing - Add GroupAnalysisSupabaseSetupModal for project configuration - Add LoginPage for Supabase authentication - Update SQL schemas with unified document analysis - Add comprehensive setup guides (HIZLI_KURULUM.md, SETUP_INSTRUCTIONS.md)[m
+[32m+[m[32m[33m9e30c50[m[33m ([m[1;31mhasandocai/feature/mistral-chatbot-deep[m[33m)[m Complete project backup with all features and documentation[m
+[32m+[m[32m[33m86af424[m test: Configure ts-jest and fix all deep analysis tests[m
+[32m+[m[32m[33m8fbb470[m feat: Add Deep Analysis Pipeline with Multi-Pass Reasoning and Critic Verification[m
+[32m+[m[32m[33m45cf6dd[m[33m ([m[1;31morigin/feature/mistral-chatbot-rag[m[33m, [m[1;31mhasandocai/main[m[33m, [m[1;31mhasandocai/feature/mistral-chatbot-rag[m[33m, [m[1;32mfeature/mistral-chatbot-rag[m[33m)[m BGE m3 Optimizasyonu yapıldı[m
+[32m+[m[32m[33m09b012f[m Emmbeded AI ile entegrasyon saÄŸlandÄ±[m
+[32m+[m[32m[33m46d4353[m Supabase entegrasyonları tamamlandı[m
+[1mdiff --git a/src/main/ipc-handlers.ts b/src/main/ipc-handlers.ts[m
+[1mindex 2bbb3be..d4af151 100644[m
+[1m--- a/src/main/ipc-handlers.ts[m
+[1m+++ b/src/main/ipc-handlers.ts[m
+[36m@@ -1688,9 +1688,97 @@[m [mipcMain.handle('file:open', async (event) => {[m
+ [m
+ ipcMain.handle('file:process', async (event, filePath: string, options: any) => {[m
+   try {[m
+[31m-    // This would be implemented based on your file processing logic[m
+     console.log('Processing file:', filePath, 'with options:', options);[m
+[31m-    return { success: true, message: 'File processed successfully' };[m
+[32m+[m[41m    [m
+[32m+[m[32m    // Import and use the actual FileProcessingService[m
+[32m+[m[32m    const { FileProcessingService } = await import('./services/FileProcessingService');[m
+[32m+[m[32m    const processingService = new FileProcessingService();[m
+[32m+[m[41m    [m
+[32m+[m[32m    // Convert options to match FileProcessingService interface[m
+[32m+[m[32m    const conversionOptions = {[m
+[32m+[m[32m      outputFormat: (options.iLovePDFTool?.includes('pdf_to_docx') ? 'docx' :[m[41m [m
+[32m+[m[32m                   options.iLovePDFTool?.includes('docx_to_pdf') ? 'pdf' :[m[41m [m
+[32m+[m[32m                   options.iLovePDFTool?.includes('pdf_to_csv') ? 'csv' :[m[41m [m
+[32m+[m[32m                   options.iLovePDFTool?.includes('csv_to_docx') ? 'docx' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('csv_to_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('docx_to_csv') ? 'csv' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('xlsx_to_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('xlsx_to_docx') ? 'docx' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('xlsx_to_csv') ? 'csv' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('pptx_to_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('pptx_to_docx') ? 'docx' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('jpg_to_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('png_to_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('gif_to_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('bmp_to_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('compress_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('merge_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('split_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('watermark_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('unlock_pdf') ? 'pdf' :[m
+[32m+[m[32m                   options.iLovePDFTool?.includes('pdf_to_searchable') ? 'pdf' : 'pdf') as 'pdf' | 'docx' | 'csv',[m
+[32m+[m[32m      quality: options.quality || 'medium',[m
+[32m+[m[32m      preserveFormatting: options.preserveFormatting || true,[m
+[32m+[m[32m      ocrEnabled: options.ocrEnabled || false,[m
+[32m+[m[32m      mergeFiles: options.mergeFiles || false[m
+[32m+[m[32m    };[m
+[32m+[m[41m    [m
+[32m+[m[32m    console.log('Converted options:', conversionOptions);[m
+[32m+[m[41m    [m
+[32m+[m[32m    // Process the file using the real service[m
+[32m+[m[32m    const result = await processingService.processFile(filePath, conversionOptions);[m
+[32m+[m[41m    [m
+[32m+[m[32m    if (result.success) {[m
+[32m+[m[32m      console.log('File processing completed successfully');[m
+[32m+[m[41m      [m
+[32m+[m[32m      // Auto-save the file to desktop (cross-platform)[m
+[32m+[m[32m      let autoSavePath: string | null = null;[m
+[32m+[m[32m      if (result.data) {[m
+[32m+[m[32m        try {[m
+[32m+[m[32m          const fs = await import('fs/promises');[m
+[32m+[m[32m          const path = await import('path');[m
+[32m+[m[32m          const { homedir } = await import('os');[m
+[32m+[m[41m          [m
+[32m+[m[32m          // Get desktop path (cross-platform)[m
+[32m+[m[32m          const desktopPath = path.join(homedir(), 'Desktop');[m
+[32m+[m[41m          [m
+[32m+[m[32m          // Ensure desktop directory exists[m
+[32m+[m[32m          await fs.mkdir(desktopPath, { recursive: true });[m
+[32m+[m[41m          [m
+[32m+[m[32m          // Generate output filename[m
+[32m+[m[32m          const originalName = path.basename(filePath);[m
+[32m+[m[32m          const nameWithoutExt = path.parse(originalName).name;[m
+[32m+[m[32m          const outputExt = conversionOptions.outputFormat === 'docx' ? '.docx' :[m[41m [m
+[32m+[m[32m                           conversionOptions.outputFormat === 'csv' ? '.csv' : '.pdf';[m
+[32m+[m[41m          [m
+[32m+[m[32m          const outputFileName = `${nameWithoutExt}_converted${outputExt}`;[m
+[32m+[m[32m          const fullOutputPath = path.join(desktopPath, outputFileName);[m
+[32m+[m[41m          [m
+[32m+[m[32m          // Write the converted file[m
+[32m+[m[32m          await fs.writeFile(fullOutputPath, result.data);[m
+[32m+[m[32m          autoSavePath = fullOutputPath;[m
+[32m+[m[41m          [m
+[32m+[m[32m          console.log('File auto-saved to desktop:', autoSavePath);[m
+[32m+[m[32m        } catch (autoSaveError) {[m
+[32m+[m[32m          console.error('Auto-save failed:', autoSaveError);[m
+[32m+[m[32m        }[m
+[32m+[m[32m      }[m
+[32m+[m[41m      [m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: true,[m
+[32m+[m[32m        message: 'File processed successfully',[m
+[32m+[m[32m        outputPath: result.outputPath,[m
+[32m+[m[32m        outputExtension: `.${conversionOptions.outputFormat}`,[m
+[32m+[m[32m        autoSavePath: autoSavePath,[m
+[32m+[m[32m        metadata: result.metadata[m
+[32m+[m[32m      };[m
+[32m+[m[32m    } else {[m
+[32m+[m[32m      console.error('File processing failed:', result.error);[m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: false,[m
+[32m+[m[32m        error: result.error || 'File processing failed'[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+   } catch (error) {[m
+     console.error('Error processing file:', error);[m
+     return { success: false, error: error instanceof Error ? error.message : 'Failed to process file' };[m
+[1mdiff --git a/src/main/services/FileProcessingService.ts b/src/main/services/FileProcessingService.ts[m
+[1mindex f624e5e..9f8c452 100644[m
+[1m--- a/src/main/services/FileProcessingService.ts[m
+[1m+++ b/src/main/services/FileProcessingService.ts[m
+[36m@@ -70,6 +70,21 @@[m [mexport class FileProcessingService {[m
+         case '.csv':[m
+           result = await this.processCSV(filePath, options);[m
+           break;[m
+[32m+[m[32m        case '.xlsx':[m
+[32m+[m[32m        case '.xls':[m
+[32m+[m[32m          result = await this.processExcel(filePath, options);[m
+[32m+[m[32m          break;[m
+[32m+[m[32m        case '.pptx':[m
+[32m+[m[32m        case '.ppt':[m
+[32m+[m[32m          result = await this.processPowerPoint(filePath, options);[m
+[32m+[m[32m          break;[m
+[32m+[m[32m        case '.jpg':[m
+[32m+[m[32m        case '.jpeg':[m
+[32m+[m[32m        case '.png':[m
+[32m+[m[32m        case '.gif':[m
+[32m+[m[32m        case '.bmp':[m
+[32m+[m[32m          result = await this.processImage(filePath, options);[m
+[32m+[m[32m          break;[m
+         default:[m
+           throw new Error(`Unsupported file format: ${fileExt}`);[m
+       }[m
+[36m@@ -1044,6 +1059,272 @@[m [mexport class FileProcessingService {[m
+     }[m
+   }[m
+ [m
+[32m+[m[32m  // Process Excel files[m
+[32m+[m[32m  private async processExcel(filePath: string, options: ConversionOptions): Promise<ConversionResult> {[m
+[32m+[m[32m    const fileBuffer = await fs.readFile(filePath);[m
+[32m+[m[41m    [m
+[32m+[m[32m    switch (options.outputFormat) {[m
+[32m+[m[32m      case 'pdf':[m
+[32m+[m[32m        return await this.excelToPDF(fileBuffer, options);[m
+[32m+[m[32m      case 'docx':[m
+[32m+[m[32m        return await this.excelToWord(fileBuffer, options);[m
+[32m+[m[32m      case 'csv':[m
+[32m+[m[32m        return await this.excelToCSV(fileBuffer, options);[m
+[32m+[m[32m      default:[m
+[32m+[m[32m        throw new Error(`Cannot convert Excel to ${options.outputFormat}`);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Process PowerPoint files[m
+[32m+[m[32m  private async processPowerPoint(filePath: string, options: ConversionOptions): Promise<ConversionResult> {[m
+[32m+[m[32m    const fileBuffer = await fs.readFile(filePath);[m
+[32m+[m[41m    [m
+[32m+[m[32m    switch (options.outputFormat) {[m
+[32m+[m[32m      case 'pdf':[m
+[32m+[m[32m        return await this.powerPointToPDF(fileBuffer, options);[m
+[32m+[m[32m      case 'docx':[m
+[32m+[m[32m        return await this.powerPointToWord(fileBuffer, options);[m
+[32m+[m[32m      default:[m
+[32m+[m[32m        throw new Error(`Cannot convert PowerPoint to ${options.outputFormat}`);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Process Image files[m
+[32m+[m[32m  private async processImage(filePath: string, options: ConversionOptions): Promise<ConversionResult> {[m
+[32m+[m[32m    const fileBuffer = await fs.readFile(filePath);[m
+[32m+[m[41m    [m
+[32m+[m[32m    switch (options.outputFormat) {[m
+[32m+[m[32m      case 'pdf':[m
+[32m+[m[32m        return await this.imageToPDF(fileBuffer, options);[m
+[32m+[m[32m      default:[m
+[32m+[m[32m        throw new Error(`Cannot convert Image to ${options.outputFormat}`);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Excel to PDF conversion[m
+[32m+[m[32m  private async excelToPDF(buffer: Buffer, options: ConversionOptions): Promise<ConversionResult> {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      // Use ConvertAPI for Excel to PDF conversion[m
+[32m+[m[32m      const result = await this.convertAPI.convertFile(buffer, 'xlsx', 'pdf');[m
+[32m+[m[32m      return result;[m
+[32m+[m[32m    } catch (error) {[m
+[32m+[m[32m      // Fallback to simple text conversion[m
+[32m+[m[32m      const text = 'Excel file conversion - Content not available in fallback mode';[m
+[32m+[m[32m      const pdfDoc = await PDFDocument.create();[m
+[32m+[m[32m      const page = pdfDoc.addPage([595.28, 841.89]);[m
+[32m+[m[41m      [m
+[32m+[m[32m      page.drawText('Excel to PDF Conversion', {[m
+[32m+[m[32m        x: 50,[m
+[32m+[m[32m        y: 750,[m
+[32m+[m[32m        size: 16,[m
+[32m+[m[32m      });[m
+[32m+[m[41m      [m
+[32m+[m[32m      page.drawText(text, {[m
+[32m+[m[32m        x: 50,[m
+[32m+[m[32m        y: 700,[m
+[32m+[m[32m        size: 12,[m
+[32m+[m[32m      });[m
+[32m+[m[41m      [m
+[32m+[m[32m      const pdfBytes = await pdfDoc.save();[m
+[32m+[m[41m      [m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: true,[m
+[32m+[m[32m        data: Buffer.from(pdfBytes),[m
+[32m+[m[32m        metadata: {[m
+[32m+[m[32m          originalSize: buffer.length,[m
+[32m+[m[32m          outputSize: pdfBytes.length,[m
+[32m+[m[32m          processingTime: 0,[m
+[32m+[m[32m          pages: 1,[m
+[32m+[m[32m        },[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Excel to Word conversion[m
+[32m+[m[32m  private async excelToWord(buffer: Buffer, options: ConversionOptions): Promise<ConversionResult> {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      // Use ConvertAPI for Excel to DOCX conversion[m
+[32m+[m[32m      const result = await this.convertAPI.convertFile(buffer, 'xlsx', 'docx');[m
+[32m+[m[32m      return result;[m
+[32m+[m[32m    } catch (error) {[m
+[32m+[m[32m      // Fallback to simple document creation[m
+[32m+[m[32m      const doc = new Document({[m
+[32m+[m[32m        sections: [{[m
+[32m+[m[32m          properties: {},[m
+[32m+[m[32m          children: [[m
+[32m+[m[32m            new Paragraph({[m
+[32m+[m[32m              children: [new TextRun({[m
+[32m+[m[32m                text: 'Excel to Word Conversion',[m
+[32m+[m[32m                bold: true,[m
+[32m+[m[32m                size: 16,[m
+[32m+[m[32m              })],[m
+[32m+[m[32m            }),[m
+[32m+[m[32m            new Paragraph({[m
+[32m+[m[32m              children: [new TextRun({[m
+[32m+[m[32m                text: 'Content not available in fallback mode',[m
+[32m+[m[32m                size: 12,[m
+[32m+[m[32m              })],[m
+[32m+[m[32m            }),[m
+[32m+[m[32m          ],[m
+[32m+[m[32m        }],[m
+[32m+[m[32m      });[m
+[32m+[m
+[32m+[m[32m      const docBuffer = await Packer.toBuffer(doc);[m
+[32m+[m[41m      [m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: true,[m
+[32m+[m[32m        data: docBuffer,[m
+[32m+[m[32m        metadata: {[m
+[32m+[m[32m          originalSize: buffer.length,[m
+[32m+[m[32m          outputSize: docBuffer.length,[m
+[32m+[m[32m          processingTime: 0,[m
+[32m+[m[32m        },[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Excel to CSV conversion[m
+[32m+[m[32m  private async excelToCSV(buffer: Buffer, options: ConversionOptions): Promise<ConversionResult> {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      // Use ConvertAPI for Excel to CSV conversion[m
+[32m+[m[32m      const result = await this.convertAPI.convertFile(buffer, 'xlsx', 'csv');[m
+[32m+[m[32m      return result;[m
+[32m+[m[32m    } catch (error) {[m
+[32m+[m[32m      // Fallback to simple CSV creation[m
+[32m+[m[32m      const csvContent = 'Sheet,Row,Column,Content\n1,1,1,Excel file conversion - Content not available in fallback mode';[m
+[32m+[m[32m      const csvBuffer = Buffer.from(csvContent, 'utf-8');[m
+[32m+[m[41m      [m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: true,[m
+[32m+[m[32m        data: csvBuffer,[m
+[32m+[m[32m        metadata: {[m
+[32m+[m[32m          originalSize: buffer.length,[m
+[32m+[m[32m          outputSize: csvBuffer.length,[m
+[32m+[m[32m          processingTime: 0,[m
+[32m+[m[32m        },[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // PowerPoint to PDF conversion[m
+[32m+[m[32m  private async powerPointToPDF(buffer: Buffer, options: ConversionOptions): Promise<ConversionResult> {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      // Use ConvertAPI for PowerPoint to PDF conversion[m
+[32m+[m[32m      const result = await this.convertAPI.convertFile(buffer, 'pptx', 'pdf');[m
+[32m+[m[32m      return result;[m
+[32m+[m[32m    } catch (error) {[m
+[32m+[m[32m      // Fallback to simple PDF creation[m
+[32m+[m[32m      const pdfDoc = await PDFDocument.create();[m
+[32m+[m[32m      const page = pdfDoc.addPage([595.28, 841.89]);[m
+[32m+[m[41m      [m
+[32m+[m[32m      page.drawText('PowerPoint to PDF Conversion', {[m
+[32m+[m[32m        x: 50,[m
+[32m+[m[32m        y: 750,[m
+[32m+[m[32m        size: 16,[m
+[32m+[m[32m      });[m
+[32m+[m[41m      [m
+[32m+[m[32m      page.drawText('Content not available in fallback mode', {[m
+[32m+[m[32m        x: 50,[m
+[32m+[m[32m        y: 700,[m
+[32m+[m[32m        size: 12,[m
+[32m+[m[32m      });[m
+[32m+[m[41m      [m
+[32m+[m[32m      const pdfBytes = await pdfDoc.save();[m
+[32m+[m[41m      [m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: true,[m
+[32m+[m[32m        data: Buffer.from(pdfBytes),[m
+[32m+[m[32m        metadata: {[m
+[32m+[m[32m          originalSize: buffer.length,[m
+[32m+[m[32m          outputSize: pdfBytes.length,[m
+[32m+[m[32m          processingTime: 0,[m
+[32m+[m[32m          pages: 1,[m
+[32m+[m[32m        },[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // PowerPoint to Word conversion[m
+[32m+[m[32m  private async powerPointToWord(buffer: Buffer, options: ConversionOptions): Promise<ConversionResult> {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      // Use ConvertAPI for PowerPoint to DOCX conversion[m
+[32m+[m[32m      const result = await this.convertAPI.convertFile(buffer, 'pptx', 'docx');[m
+[32m+[m[32m      return result;[m
+[32m+[m[32m    } catch (error) {[m
+[32m+[m[32m      // Fallback to simple document creation[m
+[32m+[m[32m      const doc = new Document({[m
+[32m+[m[32m        sections: [{[m
+[32m+[m[32m          properties: {},[m
+[32m+[m[32m          children: [[m
+[32m+[m[32m            new Paragraph({[m
+[32m+[m[32m              children: [new TextRun({[m
+[32m+[m[32m                text: 'PowerPoint to Word Conversion',[m
+[32m+[m[32m                bold: true,[m
+[32m+[m[32m                size: 16,[m
+[32m+[m[32m              })],[m
+[32m+[m[32m            }),[m
+[32m+[m[32m            new Paragraph({[m
+[32m+[m[32m              children: [new TextRun({[m
+[32m+[m[32m                text: 'Content not available in fallback mode',[m
+[32m+[m[32m                size: 12,[m
+[32m+[m[32m              })],[m
+[32m+[m[32m            }),[m
+[32m+[m[32m          ],[m
+[32m+[m[32m        }],[m
+[32m+[m[32m      });[m
+[32m+[m
+[32m+[m[32m      const docBuffer = await Packer.toBuffer(doc);[m
+[32m+[m[41m      [m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: true,[m
+[32m+[m[32m        data: docBuffer,[m
+[32m+[m[32m        metadata: {[m
+[32m+[m[32m          originalSize: buffer.length,[m
+[32m+[m[32m          outputSize: docBuffer.length,[m
+[32m+[m[32m          processingTime: 0,[m
+[32m+[m[32m        },[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Image to PDF conversion[m
+[32m+[m[32m  private async imageToPDF(buffer: Buffer, options: ConversionOptions): Promise<ConversionResult> {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      // Use ConvertAPI for Image to PDF conversion[m
+[32m+[m[32m      const result = await this.convertAPI.convertFile(buffer, 'jpg', 'pdf');[m
+[32m+[m[32m      return result;[m
+[32m+[m[32m    } catch (error) {[m
+[32m+[m[32m      // Fallback to simple PDF creation[m
+[32m+[m[32m      const pdfDoc = await PDFDocument.create();[m
+[32m+[m[32m      const page = pdfDoc.addPage([595.28, 841.89]);[m
+[32m+[m[41m      [m
+[32m+[m[32m      page.drawText('Image to PDF Conversion', {[m
+[32m+[m[32m        x: 50,[m
+[32m+[m[32m        y: 750,[m
+[32m+[m[32m        size: 16,[m
+[32m+[m[32m      });[m
+[32m+[m[41m      [m
+[32m+[m[32m      page.drawText('Image content not available in fallback mode', {[m
+[32m+[m[32m        x: 50,[m
+[32m+[m[32m        y: 700,[m
+[32m+[m[32m        size: 12,[m
+[32m+[m[32m      });[m
+[32m+[m[41m      [m
+[32m+[m[32m      const pdfBytes = await pdfDoc.save();[m
+[32m+[m[41m      [m
+[32m+[m[32m      return {[m
+[32m+[m[32m        success: true,[m
+[32m+[m[32m        data: Buffer.from(pdfBytes),[m
+[32m+[m[32m        metadata: {[m
+[32m+[m[32m          originalSize: buffer.length,[m
+[32m+[m[32m          outputSize: pdfBytes.length,[m
+[32m+[m[32m          processingTime: 0,[m
+[32m+[m[32m          pages: 1,[m
+[32m+[m[32m        },[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+   async cleanup(): Promise<void> {[m
+     try {[m
+       const files = await fs.readdir(this.tempDir);[m
+[1mdiff --git a/src/renderer/src/components/ConversionSettings.tsx b/src/renderer/src/components/ConversionSettings.tsx[m
+[1mindex 12ea315..674e198 100644[m
+[1m--- a/src/renderer/src/components/ConversionSettings.tsx[m
+[1m+++ b/src/renderer/src/components/ConversionSettings.tsx[m
+[36m@@ -230,21 +230,13 @@[m [mexport function ConversionSettings() {[m
+     }[m
+   }, [])[m
+ [m
+[31m-  // Set default output directory[m
+[32m+[m[32m  // Set default output directory to Desktop[m
+   useEffect(() => {[m
+     if (!conversionSettings.outputDirectory) {[m
+[31m-      // Get default path from main process[m
+[31m-      if ((window as any).electronAPI) {[m
+[31m-        (window as any).electronAPI.getDefaultDirectory().then((defaultPath: string) => {[m
+[31m-          setConversionSettings({ outputDirectory: defaultPath })[m
+[31m-        }).catch(() => {[m
+[31m-          // Fallback if main process is not available[m
+[31m-          setConversionSettings({ outputDirectory: 'Documents/DocData' })[m
+[31m-        })[m
+[31m-      } else {[m
+[31m-        // Fallback if electron API is not available[m
+[31m-        setConversionSettings({ outputDirectory: 'Documents/DocData' })[m
+[31m-      }[m
+[32m+[m[32m      // Set desktop as default (cross-platform)[m
+[32m+[m[32m      const isWindows = navigator.platform.toLowerCase().includes('win')[m
+[32m+[m[32m      const desktopPath = isWindows ? 'Desktop' : 'Desktop'[m
+[32m+[m[32m      setConversionSettings({ outputDirectory: desktopPath })[m
+     }[m
+   }, [])[m
+ [m
+[36m@@ -289,9 +281,10 @@[m [mexport function ConversionSettings() {[m
+             if ((result as any).autoSavePath) {[m
+               toast({[m
+                 title: 'File converted and saved',[m
+[31m-                description: `Saved to ${(result as any).autoSavePath}`,[m
+[32m+[m[32m                description: `Saved to Desktop: ${(result as any).autoSavePath.split('\\').pop() || (result as any).autoSavePath.split('/').pop()}`,[m
+               })[m
+             }[m
+[32m+[m[41m            [m
+             updateFile(file.id, { [m
+               status: 'completed', [m
+               progress: 100,[m
+[36m@@ -452,38 +445,24 @@[m [mexport function ConversionSettings() {[m
+         <CardHeader>[m
+           <CardTitle className="flex items-center space-x-2">[m
+             <FolderOpen className="h-5 w-5" />[m
+[31m-            <span>Output Directory</span>[m
+[32m+[m[32m            <span>Save Location</span>[m
+           </CardTitle>[m
+           <CardDescription>[m
+[31m-            Choose where to save converted files[m
+[32m+[m[32m            Converted files are automatically saved to your Desktop[m
+           </CardDescription>[m
+         </CardHeader>[m
+         <CardContent className="space-y-4">[m
+[31m-          <div className="flex space-x-2">[m
+[31m-            <input[m
+[31m-              type="text"[m
+[31m-              value={conversionSettings.outputDirectory || ''}[m
+[31m-              onChange={(e) => setConversionSettings({ outputDirectory: e.target.value })}[m
+[31m-              placeholder="Select output directory..."[m
+[31m-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"[m
+[31m-            />[m
+[31m-            <Button[m
+[31m-              onClick={async () => {[m
+[31m-                if ((window as any).electronAPI) {[m
+[31m-                  const result = await (window as any).electronAPI.selectDirectory();[m
+[31m-                  if (result) {[m
+[31m-                    setConversionSettings({ outputDirectory: result });[m
+[31m-                  }[m
+[31m-                }[m
+[31m-              }}[m
+[31m-              variant="outline"[m
+[31m-              size="sm"[m
+[31m-            >[m
+[31m-              Browse[m
+[31m-            </Button>[m
+[32m+[m[32m          <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">[m
+[32m+[m[32m            <CheckCircle className="h-5 w-5 text-green-600" />[m
+[32m+[m[32m            <div>[m
+[32m+[m[32m              <div className="font-medium text-green-800">Auto-save to Desktop</div>[m
+[32m+[m[32m              <div className="text-sm text-green-600">[m
+[32m+[m[32m                Files will be saved as: filename_converted.ext[m
+[32m+[m[32m              </div>[m
+[32m+[m[32m            </div>[m
+           </div>[m
+           <p className="text-xs text-muted-foreground">[m
+[31m-            Default: Documents/DocData folder[m
+[32m+[m[32m            No additional setup required - files are automatically saved to your Desktop folder[m
+           </p>[m
+         </CardContent>[m
+       </Card>[m

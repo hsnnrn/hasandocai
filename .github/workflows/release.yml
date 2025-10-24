@@ -1,0 +1,210 @@
+name: Release Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: false
+      changelog:
+        description: 'Custom changelog (optional)'
+        required: false
+        type: string
+
+jobs:
+  # Job 1: Validate and prepare release
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version format
+        id: version
+        run: |
+          version="${{ github.event.inputs.version }}"
+          
+          # Validate semantic versioning format
+          if [[ ! $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9]*)?$ ]]; then
+            echo "❌ Invalid version format. Use semantic versioning (e.g., v1.0.0, v1.0.0-beta.1)"
+            exit 1
+          fi
+          
+          echo "version=$version" >> $GITHUB_OUTPUT
+          
+          # Check if it's a pre-release
+          if [[ $version =~ -(alpha|beta|rc) ]]; then
+            echo "is-prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is-prerelease=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "✅ Version validated: $version"
+
+      - name: Check if tag exists
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          if git rev-parse "$version" >/dev/null 2>&1; then
+            echo "❌ Tag $version already exists"
+            exit 1
+          fi
+          echo "✅ Tag $version is available"
+
+      - name: Update package.json version
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          # Remove 'v' prefix for package.json
+          package_version="${version#v}"
+          
+          # Update package.json version
+          npm version "$package_version" --no-git-tag-version
+          
+          echo "✅ Updated package.json to version $package_version"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          
+          if [ -n "${{ github.event.inputs.changelog }}" ]; then
+            # Use custom changelog
+            echo "changelog<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ github.event.inputs.changelog }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          elif [ -f CHANGELOG.md ]; then
+            # Extract from CHANGELOG.md
+            echo "changelog<<EOF" >> $GITHUB_OUTPUT
+            awk "/^## \[$version\]/,/^## \[/" CHANGELOG.md | head -n -1 >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            # Generate basic changelog
+            echo "changelog<<EOF" >> $GITHUB_OUTPUT
+            echo "## 🚀 New Release: $version" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "### ✨ Features" >> $GITHUB_OUTPUT
+            echo "- Bug fixes and improvements" >> $GITHUB_OUTPUT
+            echo "- Enhanced stability" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "### 📦 Installation" >> $GITHUB_OUTPUT
+            echo "Download the appropriate installer for your platform from the Assets section below." >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit version changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
+          git push
+
+  # Job 2: Create and push tag
+  create-tag:
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Create and push tag
+        run: |
+          version="${{ needs.prepare-release.outputs.version }}"
+          
+          # Create annotated tag
+          git tag -a "$version" -m "Release $version"
+          git push origin "$version"
+          
+          echo "✅ Created and pushed tag: $version"
+
+  # Job 3: Trigger build workflow
+  trigger-build:
+    needs: [prepare-release, create-tag]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Trigger build workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ needs.prepare-release.outputs.version }}';
+            const isPrerelease = '${{ needs.prepare-release.outputs.is-prerelease }}' === 'true';
+            
+            console.log(`🚀 Triggering build for version: ${version}`);
+            console.log(`📦 Pre-release: ${isPrerelease}`);
+            
+            // The build workflow will be triggered automatically by the tag push
+            // This step is just for logging and confirmation
+            console.log('✅ Build workflow will be triggered automatically by the tag push');
+
+  # Job 4: Update documentation
+  update-docs:
+    needs: [prepare-release, create-tag]
+    runs-on: ubuntu-latest
+    if: needs.prepare-release.outputs.is-prerelease == 'false'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Update README badges
+        run: |
+          version="${{ needs.prepare-release.outputs.version }}"
+          
+          # Update version badge
+          sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/$version/g" README.md
+          
+          # Update download links
+          sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/$version/g" README.md
+          
+          echo "✅ Updated README badges and links"
+
+      - name: Commit documentation updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git commit -m "docs: update badges and links for ${{ needs.prepare-release.outputs.version }}" || exit 0
+          git push
+
+  # Job 5: Notify completion
+  notify:
+    needs: [prepare-release, create-tag, trigger-build]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Notify release status
+        run: |
+          version="${{ needs.prepare-release.outputs.version }}"
+          is_prerelease="${{ needs.prepare-release.outputs.is-prerelease }}"
+          
+          if [ "${{ needs.prepare-release.result }}" == "success" ] && [ "${{ needs.create-tag.result }}" == "success" ]; then
+            echo "✅ Release $version prepared successfully!"
+            echo "🚀 Build workflow has been triggered"
+            if [ "$is_prerelease" == "true" ]; then
+              echo "📦 This is a pre-release"
+            else
+              echo "🎉 This is a stable release"
+            fi
+          else
+            echo "❌ Release preparation failed"
+            exit 1
+          fi

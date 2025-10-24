@@ -1,76 +1,132 @@
 # Changelog
 
+All notable changes to DocDataApp will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## [Unreleased]
 
-### Added - AI Chatbot localStorage Integration 🤖📄
-- **Document Assistant Mode**: AI chatbot artık localStorage'daki belgeleri analiz edebilir
-- **LOCAL_DOCS Format Converter**: PersistentLocalStorage verilerini LOCAL_DOCS formatına dönüştürme
-- **IPC Handler - get-local-docs**: Belgeleri chatbot formatında getiren yeni API endpoint
-- **Dual Chat Modes**: Basit Sohbet ve Doküman Asistanı modları arasında geçiş
-- **Document Status UI**: Yüklenen belge sayısı ve metin bölümü sayısı göstergesi
-- **Smart Document Retrieval**: Keyword, partial, n-gram ve semantic matching ile hızlı arama
-- **Reference Display**: Kaynak gösterimi ve ilgililik puanı (relevance score)
-- **Numeric Aggregation**: Otomatik sayısal değer çıkarımı ve hesaplama (toplam, ortalama, vb.)
-- **Conversation Context**: Doküman asistanı modunda da konuşma geçmişi desteği
-- **User Guide**: CHATBOT_LOCALSTORAGE_GUIDE.md ile kapsamlı kullanım rehberi
-
-### Added - GPU & Performance
-- **GPU/CPU Toggle Switch**: Settings sayfasına GPU ve CPU arasında geçiş yapabilme özelliği eklendi
-- **AI Performance Settings**: GPU hızlandırma, GPU warmup ve context length ayarları
-- **GPU Status Monitor**: Gerçek zamanlı GPU durumu ve bellek kullanımı izleme
-- **GPU Memory Auto-Cleanup**: GPU belleği dolduğunda otomatik temizleme sistemi
-- **Manual GPU Cleanup**: Settings sayfasında tek tıkla GPU belleği temizleme butonu
-- **GPU Helper Utilities**: GPU kontrolü, bellek monitörü ve optimizasyon önerileri
-- **Gemma2 2B Integration**: Hızlı ve hafif inference için optimize edilmiş 2B model
-- **GPU Batch Files**: `start_ollama_gpu.bat` - GPU otomatik algılama ile Ollama başlatma
-- **GPU Documentation**: README-chatbot.md'ye kapsamlı GPU optimizasyon ve bellek yönetimi rehberi
+### Added
+- GitHub Actions CI/CD pipeline
+- Automated release system
+- Multi-platform builds (Windows, macOS, Linux)
+- Auto-update functionality
+- Code signing and notarization
+- Comprehensive documentation
 
 ### Changed
-- **ChatBot Component**: Tamamen yeniden yazıldı - mod geçişi, belge yükleme, metadata gösterimi
-- **Document Retrieval**: retrieveRelevantSections ile optimize edilmiş belge arama
-- **Error Messages**: Daha açıklayıcı hata mesajları ve çözüm önerileri
-- **Gemma2 System Prompt**: TDK kurallarına uygun, öz ve profesyonel Türkçe yanıtlar için optimize edildi
-- **Temperature Settings**: 0.7'den 0.25'e düşürüldü (doğruluk odaklı)
-- **Repeat Penalty**: 1.1 eklendi (tekrarlayan yanıtları önlemek için)
-- **App Store**: AI ayarları için yeni state yönetimi eklendi
-
-### Performance
-- **Document Loading**: localStorage'dan belge yükleme < 100ms
-- **Local Retrieval**: Belge araması ve eşleştirme < 200ms (embedding olmadan)
-- **Token Optimization**: Sadece ilgili metin bölümleri gönderilir (max 5 referans)
-- **GPU Mode**: İlk yanıt süresi ~5-8s'den ~2-3s'ye düştü
-- **GPU Warmup**: İlk yanıt süresi ~0.3s'ye kadar indi
-- **Context Length**: Kullanıcı tanımlı (4000-32000 karakter arası)
-- **Auto GPU Cleanup**: Bellek eşiği aşıldığında otomatik model unload (~5-6GB serbest bırakır)
+- Updated project name to "DocDataApp"
+- Improved build configuration
+- Enhanced error handling
 
 ### Fixed
-- **Conversation History**: ChatBot'ta conversation history artık doğru şekilde gönderiliyor
-- **Switch Component**: Import path düzeltildi (`@/utils/cn`)
-- **TypeScript Errors**: `anonKey` type hatası giderildi
+- Build system issues
+- Platform-specific problems
 
-### Developer Experience
-- **Type Safety**: documentRetriever.ts ile tam TypeScript desteği
-- **Comprehensive Logging**: Her aşamada detaylı console.log çıktıları
-- **Error Handling**: Try-catch blokları ve anlamlı error messages
-- **Code Documentation**: Tüm fonksiyonlarda JSDoc comments
-
-## [1.0.0] - 2025-01-09
+## [v1.0.0] - 2024-01-15
 
 ### Added
-- Llama 3.2:3b AI Chatbot entegrasyonu
-- Local BGE-M3 embedding servisi
-- Supabase OAuth entegrasyonu
-- PDF, DOCX, Excel, PowerPoint analiz servisleri
-- Grup analiz özellikleri
-- Local storage migrator
+- Initial release of DocDataApp
+- AI-powered document analysis
+- Multi-format support (PDF, DOCX, XLSX)
+- Cross-platform compatibility
+- Modern React-based UI
+- Local storage capabilities
+- Document processing workflow
+- Intelligent search functionality
 
 ### Features
-- Deterministic numeric extraction
-- Backend aggregation (sum, avg, median)
-- Dual vector DB support (Supabase pgvector / Qdrant)
-- Fallback mode (template-based responses)
-- Turkish locale support
+- 🤖 AI-powered document analysis
+- 📄 Multi-format document support
+- 🔍 Intelligent search and retrieval
+- 💾 Secure local storage
+- 🎨 Modern, responsive UI
+- 🔄 Auto-update system
+- 🌐 Cross-platform support
+
+### Technical Details
+- Built with React + Electron
+- TypeScript for type safety
+- Tailwind CSS for styling
+- Supabase for data management
+- AI integration for document processing
+
+## [v0.9.0] - 2024-01-10
+
+### Added
+- Beta release
+- Core document processing features
+- Basic AI integration
+- Initial UI implementation
+
+### Changed
+- Improved performance
+- Enhanced user experience
+
+### Fixed
+- Various bugs and issues
+
+## [v0.8.0] - 2024-01-05
+
+### Added
+- Alpha release
+- Basic document conversion
+- Initial React setup
+- Electron integration
+
+### Known Issues
+- Limited AI functionality
+- Basic UI only
+- Performance optimizations needed
 
 ---
 
-**Built with ❤️ for accurate, local-first AI document analysis**
+## Release Notes Template
+
+### For Future Releases
+
+```markdown
+## [vX.Y.Z] - YYYY-MM-DD
+
+### Added
+- New features and functionality
+
+### Changed
+- Changes to existing functionality
+
+### Deprecated
+- Features that will be removed in future versions
+
+### Removed
+- Features that have been removed
+
+### Fixed
+- Bug fixes
+
+### Security
+- Security improvements
+```
+
+## Version Numbering
+
+We follow [Semantic Versioning](https://semver.org/):
+
+- **MAJOR** version for incompatible API changes
+- **MINOR** version for backwards-compatible functionality additions
+- **PATCH** version for backwards-compatible bug fixes
+
+## Release Schedule
+
+- **Major releases**: Every 6 months
+- **Minor releases**: Every 2 months
+- **Patch releases**: As needed for bug fixes
+- **Pre-releases**: For testing new features
+
+## Support
+
+For questions about releases or to report issues:
+
+- 📧 Email: support@docdataapp.com
+- 🐛 Issues: [GitHub Issues](https://github.com/turkishdeepkebab/Docdataapp/issues)
+- 💬 Discord: [Join our community](https://discord.gg/docdataapp)

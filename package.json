@@ -1,7 +1,7 @@
 {
-  "name": "document-converter",
+  "name": "docdatai",
   "version": "1.0.0",
-  "description": "AI-powered local document conversion tool for PDF, Word, and Excel files",
+  "description": "AI-powered document analysis and processing application",
   "main": "dist/main/main/main.js",
   "homepage": "./",
   "scripts": {
@@ -16,10 +16,15 @@
     "build:main": "tsc -p tsconfig.main.json && node -e \"try { require('fs').copyFileSync('.env', 'dist/.env'); console.log('✅ .env copied to dist/ for production'); } catch(e) { console.log('⚠️ No .env file found for production build'); }\"",
     "build:all": "npm run build && electron-builder --mac --win --linux",
     "build:windows": "npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac --config electron-builder-mac.json",
-    "build:mac:prod": "NODE_ENV=production npm run build:renderer:prod && npm run build:main && electron-builder --mac --config electron-builder-mac.json --publish=never",
-    "build:mac:notarize": "NODE_ENV=production npm run build && electron-builder --mac --config electron-builder-mac.json --publish=always",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:mac:prod": "NODE_ENV=production npm run build:renderer:prod && npm run build:main && electron-builder --mac --publish=never",
+    "build:mac:notarize": "NODE_ENV=production npm run build && electron-builder --mac --publish=always",
     "build:linux": "npm run build && electron-builder --linux",
+    "dist:win": "npm run build && electron-builder --win --publish=never",
+    "dist:mac": "npm run build && electron-builder --mac --publish=never",
+    "dist:linux": "npm run build && electron-builder --linux --publish=never",
+    "dist:all": "npm run build && electron-builder --mac --win --linux --publish=never",
+    "release": "npm run build && electron-builder --mac --win --linux --publish=always",
     "electron": "electron .",
     "electron:dev": "npm run build:main && electron . --inspect=5858",
     "pack": "electron-builder --dir",
@@ -71,6 +76,7 @@
     "@typescript-eslint/eslint-plugin": "^6.7.2",
     "@typescript-eslint/parser": "^6.7.2",
     "@vitejs/plugin-react": "^4.0.4",
+    "@electron/notarize": "^2.0.0",
     "autoprefixer": "^10.4.15",
     "concurrently": "^8.2.1",
     "electron": "^27.0.0",
@@ -212,8 +218,10 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "your-org",
-      "repo": "document-converter"
-    }
+      "owner": "turkishdeepkebab",
+      "repo": "Docdataapp"
+    },
+    "autoUpdate": true,
+    "generateUpdatesFilesForAllChannels": true
   }
 }

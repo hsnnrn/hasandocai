@@ -1,0 +1,334 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: false
+
+env:
+  NODE_VERSION: '20'
+  ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+  ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+
+jobs:
+  # Job 1: Build for Windows
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, ia32]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build Windows installer
+        run: npm run dist:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: |
+            release/*.exe
+            release/*.zip
+          retention-days: 30
+
+      - name: Generate checksums (Windows)
+        run: |
+          cd release
+          Get-ChildItem -Path "*.exe", "*.zip" | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+            "$hash  $($_.Name)" | Out-File -FilePath "$($_.Name).sha256" -Encoding ASCII
+          }
+
+      - name: Upload Windows checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-checksums-${{ matrix.arch }}
+          path: release/*.sha256
+          retention-days: 30
+
+  # Job 2: Build for macOS
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build macOS installer
+        run: npm run dist:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_ID: ${{ secrets.APPLE_ID || '' }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || '' }}
+          CSC_LINK: ${{ secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD || '' }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: |
+            release/*.dmg
+            release/*.zip
+          retention-days: 30
+
+      - name: Generate checksums (macOS)
+        run: |
+          cd release
+          find . -name "*.dmg" -o -name "*.zip" | while read file; do
+            shasum -a 256 "$file" > "$file.sha256"
+          done
+
+      - name: Upload macOS checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-checksums-${{ matrix.arch }}
+          path: release/*.sha256
+          retention-days: 30
+
+  # Job 3: Build for Linux
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build Linux installer
+        run: npm run dist:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            release/*.AppImage
+            release/*.deb
+          retention-days: 30
+
+      - name: Generate checksums (Linux)
+        run: |
+          cd release
+          find . -name "*.AppImage" -o -name "*.deb" | while read file; do
+            sha256sum "$file" > "$file.sha256"
+          done
+
+      - name: Upload Linux checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-checksums-${{ matrix.arch }}
+          path: release/*.sha256
+          retention-days: 30
+
+  # Job 4: Create Release
+  create-release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          
+          # Copy Windows artifacts
+          find artifacts/windows-* -name "*.exe" -o -name "*.zip" | while read file; do
+            cp "$file" release-assets/
+          done
+          
+          # Copy macOS artifacts
+          find artifacts/macos-* -name "*.dmg" -o -name "*.zip" | while read file; do
+            cp "$file" release-assets/
+          done
+          
+          # Copy Linux artifacts
+          find artifacts/linux-* -name "*.AppImage" -o -name "*.deb" | while read file; do
+            cp "$file" release-assets/
+          done
+          
+          # Copy checksums
+          find artifacts -name "*.sha256" | while read file; do
+            cp "$file" release-assets/
+          done
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            # Extract changelog for current version
+            version="${{ steps.version.outputs.version }}"
+            echo "changelog<<EOF" >> $GITHUB_OUTPUT
+            awk "/^## \[$version\]/,/^## \[/" CHANGELOG.md | head -n -1 >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "changelog=No changelog available" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: DocDataApp ${{ steps.version.outputs.version }}
+          body: |
+            ## 🚀 DocDataApp ${{ steps.version.outputs.version }}
+            
+            ### 📦 Downloads
+            
+            **Windows:**
+            - `DocDataApp-Setup-${{ steps.version.outputs.version }}.exe` - Windows Installer
+            - `DocDataApp-${{ steps.version.outputs.version }}.zip` - Portable Version
+            
+            **macOS:**
+            - `DocDataApp-${{ steps.version.outputs.version }}.dmg` - macOS Installer
+            - `DocDataApp-${{ steps.version.outputs.version }}.zip` - macOS Archive
+            
+            **Linux:**
+            - `DocDataApp-${{ steps.version.outputs.version }}.AppImage` - Linux AppImage
+            - `DocDataApp-${{ steps.version.outputs.version }}.deb` - Debian Package
+            
+            ### 📋 Installation Instructions
+            
+            1. Download the appropriate installer for your platform
+            2. Run the installer and follow the setup wizard
+            3. The application will be installed with all dependencies
+            
+            ### 🔍 Verification
+            
+            All files include SHA256 checksums for verification:
+            ```bash
+            # Verify checksum (example)
+            sha256sum -c DocDataApp-Setup-${{ steps.version.outputs.version }}.exe.sha256
+            ```
+            
+            ### 📝 Changelog
+            
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ### 🐛 Bug Reports
+            
+            If you encounter any issues, please report them on our [GitHub Issues](https://github.com/turkishdeepkebab/Docdataapp/issues) page.
+            
+            ---
+            
+            **System Requirements:**
+            - Windows 10+ (x64)
+            - macOS 10.15+ (x64, ARM64)
+            - Ubuntu 18.04+ (x64)
+          files: release-assets/*
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease == 'true' || contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 5: Update README badges
+  update-readme:
+    needs: [create-release]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Update README badges
+        run: |
+          # Update version badge in README.md
+          sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/${{ steps.version.outputs.version }}/g" README.md
+          
+          # Commit and push changes
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git commit -m "Update version badge to ${{ steps.version.outputs.version }}" || exit 0
+          git push

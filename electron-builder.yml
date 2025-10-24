@@ -1,0 +1,140 @@
+# Electron Builder Configuration
+# This file provides additional configuration for electron-builder
+# Main configuration is in package.json "build" section
+
+# App metadata
+appId: com.docdatai.app
+productName: DocDataApp
+copyright: Copyright © 2024 DocDataApp Team
+
+# Build directories
+directories:
+  output: release
+  buildResources: assets
+
+# Files to include in the build
+files:
+  - dist/**/*
+  - node_modules/**/*
+  - assets/**/*
+  - package.json
+  - "!**/*.map"
+  - "!**/test/**/*"
+  - "!**/tests/**/*"
+  - "!**/*.test.*"
+  - "!**/*.spec.*"
+
+# Extra resources
+extraResources:
+  - from: assets/
+    to: assets/
+    filter:
+      - "**/*"
+
+# Build dependencies from source
+buildDependenciesFromSource: true
+
+# Windows configuration
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - ia32
+    - target: portable
+      arch:
+        - x64
+  publisherName: DocDataApp Team
+  verifyUpdateCodeSignature: false
+  requestedExecutionLevel: asInvoker
+
+# macOS configuration
+mac:
+  icon: assets/icon.icns
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  darkModeSupport: true
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: assets/entitlements.mac.plist
+  entitlementsInherit: assets/entitlements.mac.plist
+
+# Linux configuration
+linux:
+  icon: assets/icon.png
+  category: Office
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+    - target: rpm
+      arch:
+        - x64
+  maintainer: DocDataApp Team
+  vendor: DocDataApp Team
+  description: AI-powered document analysis and processing application
+  synopsis: Document analysis and processing tool
+
+# NSIS installer configuration
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DocDataApp
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  include: assets/installer.nsh
+  script: assets/installer.nsh
+
+# DMG configuration
+dmg:
+  title: DocDataApp
+  icon: assets/icon.icns
+  background: assets/dmg-background.png
+  contents:
+    - x: 140
+      y: 200
+      type: file
+    - x: 500
+      y: 200
+      type: link
+      path: /Applications
+  window:
+    width: 640
+    height: 400
+
+# Publishing configuration
+publish:
+  provider: github
+  owner: turkishdeepkebab
+  repo: Docdataapp
+  releaseType: release
+
+# Auto-update configuration
+autoUpdate: true
+generateUpdatesFilesForAllChannels: true
+
+# Compression
+compression: maximum
+
+# Build environment
+buildVersion: ${version}
+artifactBuildCompleted: true
+
+# Security
+afterSign: scripts/notarize.js
+afterAllArtifactBuild: scripts/after-build.js
