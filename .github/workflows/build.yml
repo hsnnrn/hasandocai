@@ -86,46 +86,46 @@ jobs:
             dist/*.dmg.blockmap
           retention-days: 30
 
-  # Linux build job (opsiyonel)
-  build-linux:
-    name: Build Linux
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          
-      - name: Install dependencies
-        run: npm ci
-        
-      - name: Build application
-        run: npm run build
-        
-      - name: Build Linux AppImage
-        run: npm run dist:linux
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-installer
-          path: |
-            dist/*.AppImage
-            dist/*.tar.gz
-          retention-days: 30
+  # Linux build job (devre dışı - canvas dependency sorunu)
+  # build-linux:
+  #   name: Build Linux
+  #   runs-on: ubuntu-latest
+  #   
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #       
+  #     - name: Setup Node.js
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: ${{ env.NODE_VERSION }}
+  #         cache: 'npm'
+  #         
+  #     - name: Install dependencies
+  #       run: npm ci
+  #       
+  #     - name: Build application
+  #       run: npm run build
+  #       
+  #     - name: Build Linux AppImage
+  #       run: npm run dist:linux
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #         
+  #     - name: Upload Linux artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: linux-installer
+  #         path: |
+  #           dist/*.AppImage
+  #           dist/*.tar.gz
+  #         retention-days: 30
 
   # Release job - tüm build'ler tamamlandıktan sonra çalışır
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build-windows, build-macos]
     if: startsWith(github.ref, 'refs/tags/')
     
     steps:
@@ -179,7 +179,6 @@ jobs:
           files: |
             artifacts/windows-installer/*
             artifacts/macos-installer/*
-            artifacts/linux-installer/*
           draft: false
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
         env:

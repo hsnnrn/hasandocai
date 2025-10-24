@@ -19,12 +19,12 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:windows": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux",
+    "build:linux": "echo 'Linux build disabled due to canvas dependency issues'",
     "start": "electron .",
-    "dist": "electron-builder --mac --win --linux",
+    "dist": "electron-builder --mac --win",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux",
+    "dist:linux": "echo 'Linux build disabled due to canvas dependency issues'",
     "release": "npm run build && electron-builder --publish=always",
     "release:mac": "npm run build && electron-builder --mac --publish=always",
     "release:win": "npm run build && electron-builder --win --publish=always",
@@ -57,6 +57,9 @@
     "react-dropzone": "^14.2.3",
     "clsx": "^2.0.0",
     "tailwind-merge": "^1.14.0"
+  },
+  "optionalDependencies": {
+    "canvas": "^2.11.2"
   },
   "devDependencies": {
     "electron-builder": "^24.0.0",
