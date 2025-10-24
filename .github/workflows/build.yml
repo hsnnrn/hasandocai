@@ -63,25 +63,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Debug - Check package.json scripts
-        run: |
-          echo "Available scripts:"
-          npm run --silent 2>&1 | grep -E "^\s*[a-zA-Z]" || echo "No scripts found"
-          echo "Package.json build section:"
-          cat package.json | grep -A 20 '"build":'
-
       - name: Build application
         run: npm run build
 
-      - name: Debug - Check build output
-        run: |
-          echo "Build output directory:"
-          ls -la dist/ || echo "No dist directory"
-          echo "Node modules:"
-          ls -la node_modules/ | head -10
-
       - name: Build Windows installer
         run: npm run dist:win
+        timeout-minutes: 30
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -131,21 +118,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Debug - Check package.json scripts
-        run: |
-          echo "Available scripts:"
-          npm run --silent 2>&1 | grep -E "^\s*[a-zA-Z]" || echo "No scripts found"
-
       - name: Build application
         run: npm run build
 
-      - name: Debug - Check build output
-        run: |
-          echo "Build output directory:"
-          ls -la dist/ || echo "No dist directory"
-
       - name: Build macOS installer
         run: npm run dist:mac
+        timeout-minutes: 30
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID || '' }}
@@ -199,21 +177,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Debug - Check package.json scripts
-        run: |
-          echo "Available scripts:"
-          npm run --silent 2>&1 | grep -E "^\s*[a-zA-Z]" || echo "No scripts found"
-
       - name: Build application
         run: npm run build
 
-      - name: Debug - Check build output
-        run: |
-          echo "Build output directory:"
-          ls -la dist/ || echo "No dist directory"
-
       - name: Build Linux installer
         run: npm run dist:linux
+        timeout-minutes: 30
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
