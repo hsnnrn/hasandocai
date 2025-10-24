@@ -221,7 +221,6 @@
       "owner": "turkishdeepkebab",
       "repo": "Docdataapp"
     },
-    "autoUpdate": true,
     "generateUpdatesFilesForAllChannels": true
   }
 }
