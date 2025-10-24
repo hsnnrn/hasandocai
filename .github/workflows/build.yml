@@ -29,7 +29,9 @@ jobs:
           cache: 'npm'
           
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci --ignore-scripts
+          npm rebuild --ignore-scripts
         
       - name: Build application
         run: npm run build
@@ -64,7 +66,9 @@ jobs:
           cache: 'npm'
           
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci --ignore-scripts
+          npm rebuild --ignore-scripts
         
       - name: Build application
         run: npm run build
