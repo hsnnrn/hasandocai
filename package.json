@@ -24,7 +24,7 @@
     "release:patch": "npm version patch && git push --follow-tags",
     "release:minor": "npm version minor && git push --follow-tags",
     "release:major": "npm version major && git push --follow-tags",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps --skip-native-deps"
   },
   "dependencies": {
     "electron": "^25.0.0",
@@ -84,6 +84,8 @@
     "directories": {
       "output": "dist"
     },
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
     "files": [
       "**/*",
       "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
