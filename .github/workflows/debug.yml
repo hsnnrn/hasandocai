@@ -1,0 +1,22 @@
+name: Debug Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: 'Debug message'
+        required: false
+        default: 'Hello from debug workflow'
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug step
+        run: |
+          echo "✅ Debug workflow is working!"
+          echo "Message: ${{ github.event.inputs.message }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "SHA: ${{ github.sha }}"
