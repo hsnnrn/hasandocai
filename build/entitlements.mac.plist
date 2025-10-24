@@ -2,86 +2,41 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Allow the app to run unsigned code -->
+    <!-- macOS Hardened Runtime için gerekli entitlements -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
-    
-    <!-- Allow the app to disable library validation -->
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
-    
-    <!-- Allow the app to access network -->
+    <key>com.apple.security.cs.disable-executable-page-protection</key>
+    <true/>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.cs.disable-executable-page-protection</key>
+    <true/>
+    <!-- Network erişimi -->
     <key>com.apple.security.network.client</key>
     <true/>
-    
-    <!-- Allow the app to access network server -->
     <key>com.apple.security.network.server</key>
     <true/>
-    
-    <!-- Allow the app to access files -->
+    <!-- Dosya erişimi -->
     <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
-    
-    <!-- Allow the app to access downloads folder -->
     <key>com.apple.security.files.downloads.read-write</key>
     <true/>
-    
-    <!-- Allow the app to access documents folder -->
-    <key>com.apple.security.files.user-selected.read-write</key>
-    <true/>
-    
-    <!-- Allow the app to access camera (if needed) -->
+    <!-- Kamera ve mikrofon erişimi (gerekirse) -->
     <key>com.apple.security.device.camera</key>
-    <false/>
-    
-    <!-- Allow the app to access microphone (if needed) -->
+    <true/>
     <key>com.apple.security.device.microphone</key>
-    <false/>
-    
-    <!-- Allow the app to access location (if needed) -->
-    <key>com.apple.security.personal-information.location</key>
-    <false/>
-    
-    <!-- Allow the app to access contacts (if needed) -->
-    <key>com.apple.security.personal-information.addressbook</key>
-    <false/>
-    
-    <!-- Allow the app to access calendar (if needed) -->
-    <key>com.apple.security.personal-information.calendars</key>
-    <false/>
-    
-    <!-- Allow the app to access reminders (if needed) -->
-    <key>com.apple.security.personal-information.reminders</key>
-    <false/>
-    
-    <!-- Allow the app to access photos (if needed) -->
-    <key>com.apple.security.personal-information.photos-library</key>
-    <false/>
-    
-    <!-- Allow the app to access music (if needed) -->
-    <key>com.apple.security.personal-information.music-library</key>
-    <false/>
-    
-    <!-- Allow the app to access movies (if needed) -->
-    <key>com.apple.security.personal-information.movies-library</key>
-    <false/>
-    
-    <!-- Allow the app to access TV shows (if needed) -->
-    <key>com.apple.security.personal-information.tv-library</key>
-    <false/>
-    
-    <!-- Allow the app to access bookmarks (if needed) -->
-    <key>com.apple.security.personal-information.bookmarks</key>
-    <false/>
-    
-    <!-- Allow the app to access cookies (if needed) -->
-    <key>com.apple.security.personal-information.cookies</key>
-    <false/>
-    
-    <!-- Allow the app to access keychain (if needed) -->
-    <key>com.apple.security.application-groups</key>
-    <array>
-        <string>com.hsnnrn.docaiproduction</string>
-    </array>
+    <true/>
 </dict>
 </plist>

@@ -1,8 +1,8 @@
 {
-  "name": "doc-ai-production",
-  "version": "0.1.5",
-  "description": "Minimal Electron app for DocAI production builds",
-  "main": "dist/main/main.js",
+  "name": "docdatai",
+  "version": "1.0.0",
+  "description": "DocDataApp - AI-powered document processing and analysis application",
+  "main": "main.js",
   "author": "hasan",
   "license": "MIT",
   "scripts": {
@@ -14,104 +14,98 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:windows": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux",
     "start": "electron .",
-    "dist": "npm run build && electron-builder --mac --win",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:all": "npm run build && electron-builder --mac --win --linux",
-    "release": "npm run dist:all",
-    "release:patch": "npm version patch && git push && git push --tags",
-    "release:minor": "npm version minor && git push && git push --tags",
-    "release:major": "npm version major && git push && git push --tags",
-    "test": "echo \"No tests specified\" && exit 0"
+    "dist": "electron-builder --mac --win --linux",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "release": "npm run build && npm run dist",
+    "release:patch": "npm version patch && git push --follow-tags",
+    "release:minor": "npm version minor && git push --follow-tags",
+    "release:major": "npm version major && git push --follow-tags",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
-    "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-dropdown-menu": "^2.1.16",
-    "@radix-ui/react-progress": "^1.1.7",
-    "@radix-ui/react-slot": "^1.2.3",
-    "@radix-ui/react-toast": "^1.2.15",
+    "electron": "^25.0.0",
     "@supabase/supabase-js": "^2.35.0",
-    "axios": "^1.5.0",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.0.0",
-    "convertapi": "^1.7.0",
-    "cors": "^2.8.5",
-    "docx": "^8.2.2",
-    "dotenv": "^16.3.1",
-    "electron-store": "^8.1.0",
-    "electron-updater": "^6.1.4",
-    "express": "^4.18.2",
     "lowdb": "^6.0.1",
+    "axios": "^1.5.0",
+    "electron-store": "^8.1.0",
     "mammoth": "^1.6.0",
-    "pdf-lib": "^1.17.1",
-    "pdf-parse": "^1.1.1",
+    "xlsx": "^0.18.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
     "pdfjs-dist": "^3.11.174",
-    "python-shell": "^5.0.0",
-    "react-dropzone": "^14.2.3",
-    "react-query": "^3.39.3",
-    "tailwind-merge": "^1.14.0",
+    "docx": "^8.2.2",
+    "pdf-lib": "^1.17.1",
+    "convertapi": "^1.7.0",
+    "pdf-parse": "^1.1.1",
     "uuid": "^9.0.0",
-    "xlsx": "^0.18.5"
+    "python-shell": "^5.0.0",
+    "react-query": "^3.39.3",
+    "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-toast": "^1.1.5",
+    "@radix-ui/react-progress": "^1.0.3",
+    "class-variance-authority": "^0.7.0",
+    "react-dropzone": "^14.2.3",
+    "clsx": "^2.0.0",
+    "tailwind-merge": "^1.14.0"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.13",
-    "@types/express": "^4.17.17",
-    "@types/node": "^20.0.0",
-    "@types/pdf-parse": "^1.1.1",
+    "electron-builder": "^24.0.0",
+    "concurrently": "^8.2.0",
+    "typescript": "^5.0.0",
+    "vite": "^4.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
+    "@types/node": "^20.0.0",
+    "@types/express": "^4.17.17",
+    "@types/cors": "^2.8.13",
+    "@types/pdf-parse": "^1.1.1",
     "@types/uuid": "^9.0.2",
-    "@vitejs/plugin-react": "^4.0.0",
-    "autoprefixer": "^10.4.0",
-    "concurrently": "^8.2.0",
-    "electron": "^25.0.0",
-    "electron-builder": "^24.0.0",
-    "lucide-react": "^0.263.0",
-    "postcss": "^8.4.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.0.0",
+    "zustand": "^4.0.0",
+    "lucide-react": "^0.263.0",
     "tailwindcss": "^3.3.0",
-    "tailwindcss-animate": "^1.0.7",
-    "terser": "^5.44.0",
-    "typescript": "^5.0.0",
-    "vite": "^4.0.0",
-    "zustand": "^4.0.0"
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0"
   },
   "build": {
-    "appId": "com.hsnnrn.docaiproduction",
-    "productName": "DocAiProduction",
-    "copyright": "Copyright © 2024 hsnnrn",
-    "npmRebuild": false,
-    "buildDependenciesFromSource": false,
+    "appId": "com.turkishdeepkebab.docdatai",
+    "productName": "DocDataApp",
+    "copyright": "Copyright © 2024 TurkishDeepKebab",
     "directories": {
       "output": "dist"
     },
     "files": [
-      "dist/main/**/*",
-      "dist/renderer/**/*",
-      "package.json"
+      "**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
     ],
     "extraResources": [],
-    "publish": {
-      "provider": "github",
-      "owner": "turkishdeepkebab",
-      "repo": "Docdataapp"
-    },
     "mac": {
       "target": [
         {
           "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
+          "arch": ["x64", "arm64"]
         }
       ],
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",
-      "notarize": false,
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -121,33 +115,21 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
+          "arch": ["x64"]
         }
       ],
-      "publisherName": "hsnnrn",
-      "icon": "assets/icon.ico",
-      "requestedExecutionLevel": "asInvoker"
+      "publisherName": "TurkishDeepKebab",
+      "icon": "assets/icon.ico"
     },
     "linux": {
       "target": [
         {
           "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "deb",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ],
-      "category": "Office",
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "category": "Office"
     },
     "nsis": {
       "oneClick": false,
@@ -158,10 +140,10 @@
       "installerHeaderIcon": "assets/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "DocAiProduction"
+      "shortcutName": "DocDataApp"
     },
     "dmg": {
-      "title": "DocAiProduction Installer",
+      "title": "DocDataApp",
       "icon": "assets/icon.icns",
       "background": "assets/dmg-background.png",
       "contents": [
@@ -177,16 +159,10 @@
         }
       ]
     },
-    "appImage": {
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    "publish": {
+      "provider": "github",
+      "owner": "turkishdeepkebab",
+      "repo": "Docdataapp"
     }
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/turkishdeepkebab/Docdataapp.git"
-  },
-  "homepage": "https://github.com/turkishdeepkebab/Docdataapp#readme",
-  "bugs": {
-    "url": "https://github.com/turkishdeepkebab/Docdataapp/issues"
   }
 }

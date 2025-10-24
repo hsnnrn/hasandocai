@@ -22,10 +22,9 @@ process.on("unhandledRejection", (reason) => {
   console.error("❌ Unhandled Rejection:", reason);
 });
 
-import { app, BrowserWindow, ipcMain, crashReporter, shell, protocol, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, crashReporter, shell, protocol } from 'electron';
 import { readFile, writeFile, unlink, mkdir } from 'fs/promises';
 import { homedir } from 'os';
-import { autoUpdater } from 'electron-updater';
 
 // CrashReporter başlatma - Windows crashpad hatasını önlemek için
 // uploadToServer: false ile crashpad'in upload denemesini engelliyoruz
@@ -70,82 +69,6 @@ if (process.platform === 'win32') {
 let mainWindow: BrowserWindow | null = null;
 let oauthServer: any = null;
 let tokenStorage: any = null;
-
-// Auto-updater configuration
-autoUpdater.checkForUpdatesAndNotify();
-autoUpdater.autoDownload = false; // Don't auto-download, let user decide
-autoUpdater.autoInstallOnAppQuit = true;
-
-// Auto-updater event handlers
-autoUpdater.on('checking-for-update', () => {
-  console.log('🔍 Checking for updates...');
-  if (mainWindow) {
-    mainWindow.webContents.send('update-checking');
-  }
-});
-
-autoUpdater.on('update-available', (info) => {
-  console.log('📦 Update available:', info.version);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-available', info);
-  }
-  
-  // Show update dialog
-  dialog.showMessageBox(mainWindow!, {
-    type: 'info',
-    title: 'Update Available',
-    message: `A new version (${info.version}) is available. Would you like to download it now?`,
-    buttons: ['Download', 'Later'],
-    defaultId: 0,
-    cancelId: 1
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.downloadUpdate();
-    }
-  });
-});
-
-autoUpdater.on('update-not-available', (info) => {
-  console.log('✅ No updates available');
-  if (mainWindow) {
-    mainWindow.webContents.send('update-not-available', info);
-  }
-});
-
-autoUpdater.on('update-downloaded', (info) => {
-  console.log('✅ Update downloaded:', info.version);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-downloaded', info);
-  }
-  
-  // Show restart dialog
-  dialog.showMessageBox(mainWindow!, {
-    type: 'info',
-    title: 'Update Ready',
-    message: 'Update downloaded. The application will restart to apply the update.',
-    buttons: ['Restart Now', 'Later'],
-    defaultId: 0,
-    cancelId: 1
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall();
-    }
-  });
-});
-
-autoUpdater.on('error', (error) => {
-  console.error('❌ Auto-updater error:', error);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-error', error);
-  }
-});
-
-autoUpdater.on('download-progress', (progressObj) => {
-  console.log(`📥 Download progress: ${Math.round(progressObj.percent)}%`);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-download-progress', progressObj);
-  }
-});
 
 // Auto-save directory path
 const getAutoSavePath = () => {
@@ -668,40 +591,6 @@ try {
 } catch (error) {
   console.error('❌ Failed to register IPC handlers early:', error);
 }
-
-// Auto-updater IPC handlers
-ipcMain.handle('check-for-updates', async () => {
-  try {
-    console.log('🔍 Manual update check requested');
-    const result = await autoUpdater.checkForUpdatesAndNotify();
-    return { success: true, result };
-  } catch (error) {
-    console.error('❌ Manual update check failed:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Update check failed' };
-  }
-});
-
-ipcMain.handle('download-update', async () => {
-  try {
-    console.log('📥 Manual update download requested');
-    await autoUpdater.downloadUpdate();
-    return { success: true };
-  } catch (error) {
-    console.error('❌ Manual update download failed:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Update download failed' };
-  }
-});
-
-ipcMain.handle('install-update', async () => {
-  try {
-    console.log('🚀 Manual update install requested');
-    autoUpdater.quitAndInstall();
-    return { success: true };
-  } catch (error) {
-    console.error('❌ Manual update install failed:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Update install failed' };
-  }
-});
 
 // IPC Handlers
 // Note: Most IPC handlers are now in ipc-handlers.ts (including supabase:fetchProjects)

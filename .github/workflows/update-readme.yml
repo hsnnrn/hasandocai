@@ -1,0 +1,37 @@
+name: Update README Badges
+
+# README.md'deki badge'leri otomatik günceller
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Her gün gece yarısı
+  workflow_dispatch:  # Manuel tetikleme
+
+jobs:
+  update-badges:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Update README badges
+      run: |
+        # Son release bilgisini al
+        LATEST_RELEASE=$(curl -s https://api.github.com/repos/turkishdeepkebab/Docdataapp/releases/latest | jq -r '.tag_name')
+        DOWNLOAD_COUNT=$(curl -s https://api.github.com/repos/turkishdeepkebab/Docdataapp/releases | jq -r '.[0].assets[].download_count' | awk '{sum+=$1} END {print sum}')
+        
+        echo "Latest release: $LATEST_RELEASE"
+        echo "Total downloads: $DOWNLOAD_COUNT"
+        
+        # README.md'yi güncelle
+        sed -i "s|github/v/release/turkishdeepkebab/Docdataapp|github/v/release/turkishdeepkebab/Docdataapp|g" README.md
+        sed -i "s|github/downloads/turkishdeepkebab/Docdataapp/total|github/downloads/turkishdeepkebab/Docdataapp/total|g" README.md
+        
+        # Commit değişiklikleri
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add README.md
+        git diff --staged --quiet || git commit -m "docs: update README badges [skip ci]"
+        git push
