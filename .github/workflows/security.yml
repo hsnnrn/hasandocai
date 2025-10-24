@@ -2,13 +2,14 @@ name: Security Scan
 
 # Bu workflow her push ve PR'da güvenlik taraması yapar
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-  schedule:
-    # Haftalık güvenlik taraması
-    - cron: '0 2 * * 1'
+  workflow_dispatch:  # Sadece manuel tetikleme
+  # push:
+  #   branches: [ main, develop ]
+  # pull_request:
+  #   branches: [ main ]
+  # schedule:
+  #   # Haftalık güvenlik taraması
+  #   - cron: '0 2 * * 1'
 
 jobs:
   # Dependency vulnerability scan

@@ -1,10 +1,10 @@
 name: Test Workflow
 
 on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+  workflow_dispatch:  # Sadece manuel tetikleme
+  # push:
+  #   tags:
+  #     - 'v*'
 
 jobs:
   test:
