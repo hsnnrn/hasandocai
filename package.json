@@ -155,7 +155,7 @@
     "buildDependenciesFromSource": true,
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "assets/icon.icns",
+      "icon": "assets/icon.svg",
       "target": [
         {
           "target": "dmg",
@@ -175,7 +175,7 @@
       "darkModeSupport": true
     },
     "win": {
-      "icon": "assets/icon.ico",
+      "icon": "assets/icon.svg",
       "target": [
         {
           "target": "nsis",
@@ -193,7 +193,7 @@
       ]
     },
     "linux": {
-      "icon": "assets/icon.png",
+      "icon": "assets/icon.svg",
       "category": "Office",
       "target": [
         {
