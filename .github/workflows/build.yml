@@ -139,10 +139,10 @@ jobs:
           
           # Ollama servisini başlat
           ollama serve &
-          sleep 10
+          sleep 5
           
-          # Gerekli modelleri indir
-          ollama pull llama3.2:3b || true
+          # Sadece hızlı modeli indir (build süresini kısaltmak için)
+          echo "📥 Hızlı model indiriliyor..."
           ollama pull llama3.2:1b || true
 
       - name: Build macOS installer with auto-dependencies
