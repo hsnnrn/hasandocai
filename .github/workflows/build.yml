@@ -1,194 +1,205 @@
 name: Build and Release
 
-# Bu workflow her yeni tag push'unda otomatik olarak tetiklenir
+# Bu workflow her yeni tag push'unda otomatik olarak çalışır
 on:
   push:
     tags:
       - 'v*'  # v1.0.0, v2.1.3 gibi semantic versioning formatında tag'ler
   workflow_dispatch:  # Manuel tetikleme için
 
+# Environment variables
+env:
+  NODE_VERSION: '18'
+  ELECTRON_VERSION: '25'
+
 jobs:
-  # Windows build job'ı
+  # Windows build job
   build-windows:
+    name: Build Windows
     runs-on: windows-latest
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+      - name: Checkout code
+        uses: actions/checkout@v4
         
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Build application
-      run: npm run build
-      
-    - name: Build Windows installer
-      run: npm run dist:win
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
         
-    - name: Upload Windows artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: windows-installer
-        path: dist/*.exe
+      - name: Build application
+        run: npm run build
         
-    - name: Generate Windows checksum
-      run: |
-        cd dist
-        Get-FileHash *.exe -Algorithm SHA256 | Out-File -FilePath windows-checksum.txt -Encoding utf8
-        
-    - name: Upload Windows checksum
-      uses: actions/upload-artifact@v4
-      with:
-        name: windows-checksum
-        path: dist/windows-checksum.txt
+      - name: Build Windows installer
+        run: npm run dist:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            dist/*.exe
+            dist/*.exe.blockmap
+          retention-days: 30
 
-  # macOS build job'ı
+  # macOS build job
   build-macos:
+    name: Build macOS
     runs-on: macos-latest
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+      - name: Checkout code
+        uses: actions/checkout@v4
         
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Build application
-      run: npm run build
-      
-    - name: Build macOS installer
-      run: npm run dist:mac
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # macOS code signing için (opsiyonel)
-        # CSC_LINK: ${{ secrets.CSC_LINK }}
-        # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
         
-    - name: Upload macOS artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: macos-installer
-        path: dist/*.dmg
+      - name: Build application
+        run: npm run build
         
-    - name: Generate macOS checksum
-      run: |
-        cd dist
-        shasum -a 256 *.dmg > macos-checksum.txt
-        
-    - name: Upload macOS checksum
-      uses: actions/upload-artifact@v4
-      with:
-        name: macos-checksum
-        path: dist/macos-checksum.txt
+      - name: Build macOS DMG
+        run: npm run dist:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing için (opsiyonel)
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
+          retention-days: 30
 
-  # Linux build job'ı (opsiyonel)
+  # Linux build job (opsiyonel)
   build-linux:
+    name: Build Linux
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+      - name: Checkout code
+        uses: actions/checkout@v4
         
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Build application
-      run: npm run build
-      
-    - name: Build Linux installer
-      run: npm run dist:linux
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
         
-    - name: Upload Linux artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-installer
-        path: dist/*.AppImage
+      - name: Build application
+        run: npm run build
         
-    - name: Generate Linux checksum
-      run: |
-        cd dist
-        sha256sum *.AppImage > linux-checksum.txt
-        
-    - name: Upload Linux checksum
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-checksum
-        path: dist/linux-checksum.txt
+      - name: Build Linux AppImage
+        run: npm run dist:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-installer
+          path: |
+            dist/*.AppImage
+            dist/*.tar.gz
+          retention-days: 30
 
-  # Release oluşturma job'ı - tüm build'ler tamamlandıktan sonra çalışır
+  # Release job - tüm build'ler tamamlandıktan sonra çalışır
   create-release:
-    needs: [build-windows, build-macos, build-linux]
+    name: Create Release
     runs-on: ubuntu-latest
+    needs: [build-windows, build-macos, build-linux]
     if: startsWith(github.ref, 'refs/tags/')
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ github.ref_name }}
-        name: Release ${{ github.ref_name }}
-        body: |
-          ## 🚀 DocDataApp ${{ github.ref_name }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
           
-          ### 📦 İndirilebilir Dosyalar
-          
-          **Windows:**
-          - `DocAiProduction-Setup-${{ github.ref_name }}.exe` - Windows Installer (NSIS)
-          
-          **macOS:**
-          - `DocAiProduction-${{ github.ref_name }}.dmg` - macOS Disk Image
-          
-          **Linux:**
-          - `DocAiProduction-${{ github.ref_name }}.AppImage` - Linux AppImage
-          
-          ### 🔐 Güvenlik
-          Tüm dosyalar SHA256 ile imzalanmıştır. Checksum dosyalarını kontrol edin.
-          
-          ### 📋 Kurulum Talimatları
-          1. İşletim sisteminize uygun dosyayı indirin
-          2. İndirilen dosyayı çalıştırın
-          3. Kurulum talimatlarını takip edin
-          4. Uygulamayı başlatın
-          
-          ### 🐛 Hata Bildirimi
-          Herhangi bir sorun yaşarsanız, lütfen [Issues](https://github.com/turkishdeepkebab/Docdataapp/issues) sayfasından bildirin.
-          
-        files: |
-          windows-installer/*.exe
-          macos-installer/*.dmg
-          linux-installer/*.AppImage
-          windows-installer/windows-checksum.txt
-          macos-installer/macos-checksum.txt
-          linux-installer/linux-checksum.txt
-        draft: false
-        prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## 🚀 DocDataApp ${{ github.ref_name }}
+            
+            ### 📦 Downloads
+            
+            **Windows:**
+            - Download the `.exe` installer
+            - Run the installer and follow the setup wizard
+            - The app will be installed with all dependencies
+            
+            **macOS:**
+            - Download the `.dmg` file
+            - Open the DMG and drag the app to Applications
+            - First run may require security permission approval
+            
+            **Linux:**
+            - Download the `.AppImage` file
+            - Make it executable: `chmod +x DocDataApp-*.AppImage`
+            - Run: `./DocDataApp-*.AppImage`
+            
+            ### 🔧 System Requirements
+            - **Windows:** Windows 10 or later (64-bit)
+            - **macOS:** macOS 10.15 or later
+            - **Linux:** Ubuntu 18.04 or later (64-bit)
+            
+            ### 📋 What's New
+            - Automated builds with GitHub Actions
+            - Cross-platform support
+            - Auto-updater integration
+            - All dependencies bundled
+            
+            ### 🐛 Bug Reports
+            If you encounter any issues, please report them on our [GitHub Issues](https://github.com/turkishdeepkebab/Docdataapp/issues) page.
+            
+          files: |
+            artifacts/windows-installer/*
+            artifacts/macos-installer/*
+            artifacts/linux-installer/*
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Security scanning (opsiyonel)
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        
+      - name: Run Snyk security scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high

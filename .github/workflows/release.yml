@@ -1,197 +1,194 @@
 name: Release Automation
 
-# Bu workflow manuel olarak tetiklenir veya belirli koşullarda çalışır
+# Bu workflow manuel olarak veya belirli koşullarda tetiklenir
 on:
   workflow_dispatch:
     inputs:
-      release_type:
-        description: 'Release type'
+      version:
+        description: 'Release version (e.g., v1.0.0)'
         required: true
-        default: 'patch'
-        type: choice
-        options:
-        - patch
-        - minor
-        - major
-        - prerelease
-      prerelease_type:
-        description: 'Prerelease type (if prerelease is selected)'
+        default: 'v1.0.0'
+      prerelease:
+        description: 'Is this a pre-release?'
+        type: boolean
+        default: false
+      changelog:
+        description: 'Changelog content'
         required: false
-        default: 'beta'
-        type: choice
-        options:
-        - alpha
-        - beta
-        - rc
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'package.json'
-      - 'CHANGELOG.md'
+        default: ''
 
 jobs:
-  # Release version belirleme
-  determine-version:
+  # Version validation
+  validate-version:
+    name: Validate Version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+      version: ${{ steps.validate.outputs.version }}
+      is-prerelease: ${{ steps.validate.outputs.is-prerelease }}
+    
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        
-    - name: Determine version
-      id: version
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          RELEASE_TYPE="${{ github.event.inputs.release_type }}"
-          PRERELEASE_TYPE="${{ github.event.inputs.prerelease_type }}"
-        else
-          # Otomatik version belirleme
-          RELEASE_TYPE="patch"
-          PRERELEASE_TYPE="beta"
-        fi
-        
-        CURRENT_VERSION=$(node -p "require('./package.json').version")
-        echo "Current version: $CURRENT_VERSION"
-        
-        if [ "$RELEASE_TYPE" = "prerelease" ]; then
-          NEW_VERSION=$(npm version $PRERELEASE_TYPE --preid=$PRERELEASE_TYPE --no-git-tag-version --dry-run | sed 's/v//')
-          echo "is-prerelease=true" >> $GITHUB_OUTPUT
-        else
-          NEW_VERSION=$(npm version $RELEASE_TYPE --no-git-tag-version --dry-run | sed 's/v//')
-          echo "is-prerelease=false" >> $GITHUB_OUTPUT
-        fi
-        
-        echo "New version: $NEW_VERSION"
-        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-  # Changelog oluşturma
-  generate-changelog:
-    needs: determine-version
-    runs-on: ubuntu-latest
-    outputs:
-      changelog: ${{ steps.changelog.outputs.changelog }}
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Generate changelog
-      id: changelog
-      run: |
-        # Son tag'i bul
-        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-        
-        if [ -z "$LAST_TAG" ]; then
-          # İlk release
-          CHANGELOG="## 🎉 İlk Release v${{ needs.determine-version.outputs.version }}
-          
-          ### ✨ Yeni Özellikler
-          - DocDataApp'in ilk sürümü
-          - AI destekli doküman işleme
-          - Çoklu platform desteği (Windows, macOS, Linux)
-          - Modern ve kullanıcı dostu arayüz
-          
-          ### 🚀 Kurulum
-          İşletim sisteminize uygun installer'ı indirin ve kurun."
-        else
-          # Son tag'den bu yana değişiklikleri al
-          CHANGELOG=$(git log $LAST_TAG..HEAD --pretty=format:"- %s" --no-merges)
-          
-          if [ -z "$CHANGELOG" ]; then
-            CHANGELOG="## 🔧 v${{ needs.determine-version.outputs.version }}
-            
-            ### 🐛 Bug Fixes
-            - Çeşitli hata düzeltmeleri ve iyileştirmeler"
-          else
-            CHANGELOG="## 🚀 v${{ needs.determine-version.outputs.version }}
-            
-            ### 📝 Değişiklikler
-            $CHANGELOG"
+      - name: Validate version format
+        id: validate
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9]+)?$ ]]; then
+            echo "❌ Invalid version format. Use semantic versioning (e.g., v1.0.0, v1.0.0-beta.1)"
+            exit 1
           fi
-        fi
-        
-        # Changelog'u dosyaya yaz
-        echo "$CHANGELOG" > CHANGELOG.md
-        
-        # Output olarak set et
-        echo "changelog<<EOF" >> $GITHUB_OUTPUT
-        echo "$CHANGELOG" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+          
+          # Check if it's a pre-release
+          if [[ $VERSION =~ -(alpha|beta|rc) ]]; then
+            echo "is-prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is-prerelease=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "✅ Version $VERSION is valid"
 
-  # Version güncelleme ve tag oluşturma
+  # Create changelog
+  generate-changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    needs: validate-version
+    outputs:
+      changelog: ${{ steps.changelog.outputs.content }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate-version.outputs.version }}"
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          echo "## 🚀 DocDataApp $VERSION" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### 📦 Downloads" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "**Windows:**" >> CHANGELOG.md
+          echo "- Download the \`.exe\` installer" >> CHANGELOG.md
+          echo "- Run the installer and follow the setup wizard" >> CHANGELOG.md
+          echo "- The app will be installed with all dependencies" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "**macOS:**" >> CHANGELOG.md
+          echo "- Download the \`.dmg\` file" >> CHANGELOG.md
+          echo "- Open the DMG and drag the app to Applications" >> CHANGELOG.md
+          echo "- First run may require security permission approval" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "**Linux:**" >> CHANGELOG.md
+          echo "- Download the \`.AppImage\` file" >> CHANGELOG.md
+          echo "- Make it executable: \`chmod +x DocDataApp-*.AppImage\`" >> CHANGELOG.md
+          echo "- Run: \`./DocDataApp-*.AppImage\`" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### 🔧 System Requirements" >> CHANGELOG.md
+          echo "- **Windows:** Windows 10 or later (64-bit)" >> CHANGELOG.md
+          echo "- **macOS:** macOS 10.15 or later" >> CHANGELOG.md
+          echo "- **Linux:** Ubuntu 18.04 or later (64-bit)" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### 📋 What's New" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          # Generate commit-based changelog
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "### Changes since $PREVIOUS_TAG:" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          # Add custom changelog if provided
+          if [ -n "${{ github.event.inputs.changelog }}" ]; then
+            echo "### Custom Changes:" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "${{ github.event.inputs.changelog }}" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          echo "### 🐛 Bug Reports" >> CHANGELOG.md
+          echo "If you encounter any issues, please report them on our [GitHub Issues](https://github.com/turkishdeepkebab/Docdataapp/issues) page." >> CHANGELOG.md
+          
+          # Output changelog content
+          CHANGELOG_CONTENT=$(cat CHANGELOG.md)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  # Create tag and trigger build
   create-release:
-    needs: [determine-version, generate-changelog]
+    name: Create Release
     runs-on: ubuntu-latest
+    needs: [validate-version, generate-changelog]
+    
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
-        token: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        
-    - name: Configure Git
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git config --local user.password ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Update version
-      run: |
-        if [ "${{ needs.determine-version.outputs.is-prerelease }}" = "true" ]; then
-          npm version prerelease --preid=beta --no-git-tag-version
-        else
-          npm version ${{ github.event.inputs.release_type || 'patch' }} --no-git-tag-version
-        fi
-        
-    - name: Create tag
-      run: |
-        VERSION=$(node -p "require('./package.json').version")
-        git add package.json CHANGELOG.md
-        git commit -m "chore: bump version to v$VERSION"
-        git tag "v$VERSION"
-        git push origin main
-        git push origin "v$VERSION"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+      - name: Create and push tag
+        run: |
+          VERSION="${{ needs.validate-version.outputs.version }}"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+          
+      - name: Wait for build completion
+        run: |
+          echo "⏳ Waiting for build workflow to complete..."
+          # Bu adım build workflow'unun tamamlanmasını bekler
+          # Gerçek implementasyonda GitHub API kullanarak workflow status kontrol edilebilir
+          sleep 300  # 5 dakika bekle
+          
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.validate-version.outputs.version }}
+          name: Release ${{ needs.validate-version.outputs.version }}
+          body: ${{ needs.generate-changelog.outputs.changelog }}
+          draft: false
+          prerelease: ${{ needs.validate-version.outputs.is-prerelease }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Build ve release (build.yml workflow'unu tetikler)
-  trigger-build:
-    needs: create-release
+  # Update README with latest release info
+  update-readme:
+    name: Update README
     runs-on: ubuntu-latest
+    needs: [validate-version, create-release]
+    
     steps:
-    - name: Trigger build workflow
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const { owner, repo } = context.repo;
-          const version = '${{ needs.determine-version.outputs.version }}';
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           
-          // Build workflow'unu tetikle
-          await github.rest.actions.createWorkflowDispatch({
-            owner,
-            repo,
-            workflow_id: 'build.yml',
-            ref: 'main'
-          });
+      - name: Update README
+        run: |
+          VERSION="${{ needs.validate-version.outputs.version }}"
+          DATE=$(date +'%Y-%m-%d')
           
-          console.log(`Build workflow triggered for version v${version}`);
+          # README.md dosyasını güncelle
+          if [ -f README.md ]; then
+            # Latest release badge'ini güncelle
+            sed -i "s/!\[Latest Release\](.*)/![Latest Release](https://img.shields.io/badge/release-$VERSION-blue.svg)/" README.md
+            
+            # Download links'ini güncelle
+            sed -i "s|Download for Windows.*|Download for Windows](https://github.com/turkishdeepkebab/Docdataapp/releases/download/$VERSION/DocDataApp-$VERSION.exe)|" README.md
+            sed -i "s|Download for macOS.*|Download for macOS](https://github.com/turkishdeepkebab/Docdataapp/releases/download/$VERSION/DocDataApp-$VERSION.dmg)|" README.md
+            sed -i "s|Download for Linux.*|Download for Linux](https://github.com/turkishdeepkebab/Docdataapp/releases/download/$VERSION/DocDataApp-$VERSION.AppImage)|" README.md
+          fi
+          
+      - name: Commit and push changes
+        run: |
+          git add README.md
+          git commit -m "Update README for release ${{ needs.validate-version.outputs.version }}" || echo "No changes to commit"
+          git push origin main || echo "Nothing to push"

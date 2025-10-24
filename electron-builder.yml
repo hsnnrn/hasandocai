@@ -1,0 +1,98 @@
+# Electron Builder Configuration
+# Bu dosya package.json'daki build konfigürasyonunu override edebilir
+
+appId: com.hsnnrn.docdatai
+productName: DocDataApp
+copyright: Copyright © 2024 Hasan
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - "**/*"
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+  - "!**/node_modules/*.d.ts"
+  - "!**/node_modules/.bin"
+  - "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}"
+  - "!.editorconfig"
+  - "!**/._*"
+  - "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}"
+  - "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}"
+  - "!**/{appveyor.yml,.travis.yml,circle.yml}"
+  - "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+
+extraResources:
+  - from: "assets/"
+    to: "assets/"
+    filter: ["**/*"]
+
+publish:
+  provider: github
+  owner: turkishdeepkebab
+  repo: Docdataapp
+
+# macOS Configuration
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.productivity
+  icon: assets/icon.icns
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  notarize:
+    teamId: YOUR_TEAM_ID
+
+# Windows Configuration
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  publisherName: Hasan
+  icon: assets/icon.ico
+  requestedExecutionLevel: asInvoker
+
+# Linux Configuration
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: tar.gz
+      arch: [x64]
+  icon: assets/icon.png
+  category: Office
+
+# NSIS Installer Configuration
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DocDataApp
+
+# DMG Configuration
+dmg:
+  title: DocDataApp Installer
+  icon: assets/icon.icns
+  background: assets/dmg-background.png
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# AppImage Configuration
+appImage:
+  artifactName: "${productName}-${version}-${arch}.${ext}"

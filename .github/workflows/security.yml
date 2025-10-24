@@ -1,0 +1,186 @@
+name: Security Scan
+
+# Bu workflow her push ve PR'da güvenlik taraması yapar
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Haftalık güvenlik taraması
+    - cron: '0 2 * * 1'
+
+jobs:
+  # Dependency vulnerability scan
+  dependency-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        
+      - name: Run Snyk security scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=package.json
+          
+      - name: Upload Snyk results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: snyk.sarif
+
+  # Code security analysis
+  code-scan:
+    name: Code Security Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript, typescript
+          
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+        
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        
+      - name: Run ESLint security rules
+        run: |
+          npm install -g eslint-plugin-security
+          npx eslint . --ext .js,.ts,.jsx,.tsx --config .eslintrc.security.js
+          
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  # Container security (if using Docker)
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Build Docker image
+        run: |
+          if [ -f Dockerfile ]; then
+            docker build -t docdataapp:latest .
+          fi
+          
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'docdataapp:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # License compliance
+  license-scan:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run license checker
+        run: |
+          npm install -g license-checker
+          license-checker --summary
+          license-checker --json > licenses.json
+          
+      - name: Check for problematic licenses
+        run: |
+          # Check for GPL, AGPL, or other problematic licenses
+          if grep -q "GPL\|AGPL\|Copyleft" licenses.json; then
+            echo "⚠️ Found potentially problematic licenses"
+            cat licenses.json | grep -E "GPL|AGPL|Copyleft"
+            exit 1
+          else
+            echo "✅ No problematic licenses found"
+          fi
+          
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: licenses.json
+          retention-days: 30
+
+  # Security policy check
+  policy-check:
+    name: Security Policy Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Check security policy
+        run: |
+          if [ ! -f SECURITY.md ]; then
+            echo "❌ SECURITY.md file is missing"
+            exit 1
+          else
+            echo "✅ SECURITY.md file exists"
+          fi
+          
+      - name: Check for security headers
+        run: |
+          # Check if security headers are configured
+          if [ -f "src/main/security.ts" ] || [ -f "src/main/security.js" ]; then
+            echo "✅ Security headers configuration found"
+          else
+            echo "⚠️ No security headers configuration found"
+          fi
+          
+      - name: Check for CSP configuration
+        run: |
+          # Check for Content Security Policy
+          if grep -r "Content-Security-Policy" src/; then
+            echo "✅ CSP configuration found"
+          else
+            echo "⚠️ No CSP configuration found"
+          fi

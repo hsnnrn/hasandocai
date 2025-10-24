@@ -1,10 +1,15 @@
 {
   "name": "docdatai",
   "version": "1.0.0",
-  "description": "DocDataApp - AI-powered document processing and analysis application",
+  "description": "AI-powered document analysis and processing application",
   "main": "main.js",
   "author": "hasan",
   "license": "MIT",
+  "homepage": "https://github.com/turkishdeepkebab/Docdataapp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/turkishdeepkebab/Docdataapp.git"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\"",
     "dev:renderer": "vite",
@@ -20,14 +25,14 @@
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
     "dist:linux": "electron-builder --linux",
-    "release": "npm run build && npm run dist",
-    "release:patch": "npm version patch && git push --follow-tags",
-    "release:minor": "npm version minor && git push --follow-tags",
-    "release:major": "npm version major && git push --follow-tags",
-    "postinstall": "electron-builder install-app-deps --skip-native-deps"
+    "release": "npm run build && electron-builder --publish=always",
+    "release:mac": "npm run build && electron-builder --mac --publish=always",
+    "release:win": "npm run build && electron-builder --win --publish=always",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "electron": "^25.0.0",
+    "electron-updater": "^6.1.4",
     "@supabase/supabase-js": "^2.35.0",
     "lowdb": "^6.0.1",
     "axios": "^1.5.0",
@@ -48,7 +53,6 @@
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-toast": "^1.1.5",
     "@radix-ui/react-progress": "^1.0.3",
-    "@radix-ui/react-dialog": "^1.0.5",
     "class-variance-authority": "^0.7.0",
     "react-dropzone": "^14.2.3",
     "clsx": "^2.0.0",
@@ -73,19 +77,16 @@
     "zustand": "^4.0.0",
     "lucide-react": "^0.263.0",
     "tailwindcss": "^3.3.0",
-    "tailwindcss-animate": "^1.0.7",
     "autoprefixer": "^10.4.0",
     "postcss": "^8.4.0"
   },
   "build": {
-    "appId": "com.turkishdeepkebab.docdatai",
+    "appId": "com.hsnnrn.docdatai",
     "productName": "DocDataApp",
-    "copyright": "Copyright © 2024 TurkishDeepKebab",
+    "copyright": "Copyright © 2024 Hasan",
     "directories": {
       "output": "dist"
     },
-    "npmRebuild": false,
-    "nodeGypRebuild": false,
     "files": [
       "**/*",
       "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
@@ -100,7 +101,18 @@
       "!**/{appveyor.yml,.travis.yml,circle.yml}",
       "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
     ],
-    "extraResources": [],
+    "extraResources": [
+      {
+        "from": "assets/",
+        "to": "assets/",
+        "filter": ["**/*"]
+      }
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "turkishdeepkebab",
+      "repo": "Docdataapp"
+    },
     "mac": {
       "target": [
         {
@@ -110,25 +122,37 @@
       ],
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "notarize": {
+        "teamId": "YOUR_TEAM_ID"
+      }
     },
     "win": {
       "target": [
         {
           "target": "nsis",
           "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
         }
       ],
-      "publisherName": "TurkishDeepKebab",
-      "icon": "assets/icon.ico"
+      "publisherName": "Hasan",
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
     },
     "linux": {
       "target": [
         {
           "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "tar.gz",
           "arch": ["x64"]
         }
       ],
@@ -147,7 +171,7 @@
       "shortcutName": "DocDataApp"
     },
     "dmg": {
-      "title": "DocDataApp",
+      "title": "DocDataApp Installer",
       "icon": "assets/icon.icns",
       "background": "assets/dmg-background.png",
       "contents": [
@@ -163,10 +187,8 @@
         }
       ]
     },
-    "publish": {
-      "provider": "github",
-      "owner": "turkishdeepkebab",
-      "repo": "Docdataapp"
+    "appImage": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   }
 }
