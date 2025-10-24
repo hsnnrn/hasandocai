@@ -1,0 +1,22 @@
+{
+  "title": "DocDataApp",
+  "icon": "assets/icon.svg",
+  "background": "assets/dmg-background.svg",
+  "contents": [
+    {
+      "x": 140,
+      "y": 200,
+      "type": "file"
+    },
+    {
+      "x": 500,
+      "y": 200,
+      "type": "link",
+      "path": "/Applications"
+    }
+  ],
+  "window": {
+    "width": 640,
+    "height": 400
+  }
+}

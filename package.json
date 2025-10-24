@@ -19,6 +19,8 @@
     "build:mac": "npm run build && electron-builder --mac",
     "build:mac:prod": "NODE_ENV=production npm run build:renderer:prod && npm run build:main && electron-builder --mac --publish=never",
     "build:mac:notarize": "NODE_ENV=production npm run build && electron-builder --mac --publish=always",
+    "build:mac:dmg": "npm run build && electron-builder --mac --config.dmg.title='DocDataApp' --config.dmg.background='assets/dmg-background.png'",
+    "build:mac:auto": "npm run build && npm run setup:ollama:mac && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
     "dist:win": "npm run build && electron-builder --win --publish=never",
     "dist:mac": "npm run build && electron-builder --mac --publish=never",
@@ -44,7 +46,9 @@
     "optimize": "node scripts/optimize-performance.js",
     "optimize:prod": "node scripts/optimize-for-production.js",
     "clean": "rm -rf dist release",
-    "clean:all": "npm run clean && rm -rf node_modules package-lock.json"
+    "clean:all": "npm run clean && rm -rf node_modules package-lock.json",
+    "setup:ollama:mac": "node scripts/setup-ollama-mac.js",
+    "setup:dependencies:mac": "node scripts/setup-dependencies-mac.js"
   },
   "keywords": [
     "electron",
@@ -150,6 +154,14 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "scripts/",
+        "to": "scripts/",
+        "filter": [
+          "setup-ollama-mac.js",
+          "setup-dependencies-mac.js"
+        ]
       }
     ],
     "buildDependenciesFromSource": true,
@@ -172,7 +184,14 @@
           ]
         }
       ],
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist",
+      "notarize": {
+        "teamId": "APPLE_TEAM_ID"
+      }
     },
     "win": {
       "icon": "assets/icon.svg",
@@ -221,6 +240,28 @@
       "owner": "turkishdeepkebab",
       "repo": "Docdataapp"
     },
-    "generateUpdatesFilesForAllChannels": true
+    "generateUpdatesFilesForAllChannels": true,
+    "dmg": {
+      "title": "DocDataApp",
+      "icon": "assets/icon.svg",
+      "background": "assets/dmg-background.png",
+      "contents": [
+        {
+          "x": 140,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 500,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 640,
+        "height": 400
+      }
+    }
   }
 }

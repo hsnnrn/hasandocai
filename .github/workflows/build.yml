@@ -101,7 +101,7 @@ jobs:
      runs-on: macos-latest
      strategy:
        matrix:
-         arch: [x64]
+         arch: [x64, arm64]
     
     steps:
       - name: Checkout code
@@ -115,15 +115,39 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-       - name: Install dependencies
-         run: npm ci --no-audit --no-fund
+      - name: Setup Homebrew
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "$(/opt/homebrew/bin/brew shellenv)" >> $GITHUB_ENV
+          source $GITHUB_ENV
 
-       - name: Build application
-         run: npm run build
+      - name: Install system dependencies
+        run: |
+          brew install python git curl wget
+          python3 -m pip install --upgrade pip
 
-       - name: Build macOS installer
-         run: npm run dist:mac
-         timeout-minutes: 45
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build application
+        run: npm run build
+
+      - name: Setup Ollama for Mac
+        run: |
+          # Ollama kurulumu
+          brew install ollama
+          
+          # Ollama servisini başlat
+          ollama serve &
+          sleep 10
+          
+          # Gerekli modelleri indir
+          ollama pull llama3.2:3b || true
+          ollama pull llama3.2:1b || true
+
+      - name: Build macOS installer with auto-dependencies
+        run: npm run build:mac:auto
+        timeout-minutes: 60
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID || '' }}
@@ -132,6 +156,16 @@ jobs:
           CSC_LINK: ${{ secrets.CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD || '' }}
 
+      - name: Create DMG with auto-install
+        run: |
+          # DMG içine kurulum script'ini kopyala
+          cp scripts/install-mac.sh release/
+          cp scripts/setup-ollama-mac.js release/
+          cp scripts/setup-dependencies-mac.js release/
+          
+          # DMG içeriğini düzenle
+          echo "📦 DMG içeriği hazırlanıyor..."
+
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -139,12 +173,15 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
+            release/install-mac.sh
+            release/setup-ollama-mac.js
+            release/setup-dependencies-mac.js
           retention-days: 30
 
       - name: Generate checksums (macOS)
         run: |
           cd release
-          find . -name "*.dmg" -o -name "*.zip" | while read file; do
+          find . -name "*.dmg" -o -name "*.zip" -o -name "*.sh" -o -name "*.js" | while read file; do
             shasum -a 256 "$file" > "$file.sha256"
           done
 
@@ -287,8 +324,11 @@ jobs:
             - `DocDataApp-${{ steps.version.outputs.version }}.zip` - Portable Version
             
             **macOS:**
-            - `DocDataApp-${{ steps.version.outputs.version }}.dmg` - macOS Installer
+            - `DocDataApp-${{ steps.version.outputs.version }}.dmg` - macOS Installer (Otomatik bağımlılık kurulumu ile)
             - `DocDataApp-${{ steps.version.outputs.version }}.zip` - macOS Archive
+            - `install-mac.sh` - Otomatik kurulum script'i
+            - `setup-ollama-mac.js` - Ollama kurulum script'i
+            - `setup-dependencies-mac.js` - Bağımlılık kurulum script'i
             
             **Linux:**
             - `DocDataApp-${{ steps.version.outputs.version }}.AppImage` - Linux AppImage
@@ -296,8 +336,21 @@ jobs:
             
             ### 📋 Installation Instructions
             
-            1. Download the appropriate installer for your platform
+            **macOS (Otomatik Kurulum):**
+            1. Download the DMG file for your Mac architecture (Intel x64 or Apple Silicon ARM64)
+            2. Open the DMG file and drag DocDataApp to Applications
+            3. Run the included `install-mac.sh` script for automatic dependency installation
+            4. The script will automatically install Ollama, Python dependencies, and start the AI services
+            5. Launch DocDataApp from Applications folder
+            
+            **Windows:**
+            1. Download the Windows installer
             2. Run the installer and follow the setup wizard
+            3. The application will be installed with all dependencies
+            
+            **Linux:**
+            1. Download the appropriate package for your distribution
+            2. Install using your package manager
             3. The application will be installed with all dependencies
             
             ### 🔍 Verification
