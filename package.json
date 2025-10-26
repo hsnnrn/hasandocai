@@ -48,7 +48,8 @@
     "clean": "rm -rf dist release",
     "clean:all": "npm run clean && rm -rf node_modules package-lock.json",
     "setup:ollama:mac": "node scripts/setup-ollama-mac.js",
-    "setup:dependencies:mac": "node scripts/setup-dependencies-mac.js"
+    "setup:dependencies:mac": "node scripts/setup-dependencies-mac.js",
+    "create:mac:dmg": "node scripts/create-mac-dmg-manual.js"
   },
   "keywords": [
     "electron",
