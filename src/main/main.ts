@@ -11,6 +11,15 @@ import * as path from 'path';
 
 // .env'i kökten oku
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+
+// 🔐 Yerleşik Supabase OAuth Keyleri - GitHub'dan pull yapıldığında otomatik gelir
+const BUILT_IN_SUPABASE_OAUTH_CLIENT_ID = '16f8e0d2-e9c6-4b8a-896d-2b687551ad0a';
+const BUILT_IN_SUPABASE_OAUTH_CLIENT_SECRET = 'sba_867174f18feedf9b919abb112665d0438820e161';
+
+// Environment'dan yoksa yerleşik keyleri kullan
+process.env.SUPABASE_OAUTH_CLIENT_ID = process.env.SUPABASE_OAUTH_CLIENT_ID || BUILT_IN_SUPABASE_OAUTH_CLIENT_ID;
+process.env.SUPABASE_OAUTH_CLIENT_SECRET = process.env.SUPABASE_OAUTH_CLIENT_SECRET || BUILT_IN_SUPABASE_OAUTH_CLIENT_SECRET;
+
 console.log("Loaded CLIENT_ID", process.env.SUPABASE_OAUTH_CLIENT_ID);
 
 // Crash yakalama
@@ -152,10 +161,10 @@ function createMainWindow(): void {
     mainWindow = null;
   });
 
-  // Development modunda DevTools'u aç
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
-  }
+  // Development modunda DevTools'u aç (devre dışı)
+  // if (isDev) {
+  //   mainWindow.webContents.openDevTools();
+  // }
 }
 
 // OAuth popup window oluşturma fonksiyonu

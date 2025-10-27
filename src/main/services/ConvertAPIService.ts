@@ -151,7 +151,7 @@ export class ConvertAPIService {
 
     // Generate new token with default settings
     const tokenRequest: JWTTokenRequest = {
-      Kid: '1fbde8c8-df21-457d-8b8a-3e24ee42a823',
+      Kid: '2cb5e4c5-75db-45c3-8692-f2f51c827872',
       ExpiresInSec: 3600,
       ClientIp: 'localhost,197.0.0.1'
     };

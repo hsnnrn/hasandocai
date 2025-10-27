@@ -39,7 +39,7 @@ export class FileProcessingService {
   constructor() {
     this.tempDir = path.join(process.cwd(), 'temp');
     // Initialize ConvertAPI with your API key
-    this.convertAPI = new ConvertAPIService('w9G3Anhj1OyLztslOZmwaZcjwJhNpSbn');
+    this.convertAPI = new ConvertAPIService('XGZc3Z8cK2uNLs4KNVZBWQtDulqRVO2K');
     this.ensureTempDir();
   }
 
