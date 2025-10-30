@@ -1,0 +1,144 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # v1.0.0, v2.0.0 gibi tag'ler için çalışır
+  workflow_dispatch:  # Manuel olarak da çalıştırılabilir
+
+jobs:
+  # Windows Build Job
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Build Application
+        run: npm run build
+        env:
+          NODE_ENV: production
+          
+      - name: Build Windows Installer (NSIS)
+        run: npm run dist:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: |
+            release/*.exe
+            release/*.msi
+          retention-days: 5
+
+  # macOS Build Job
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Build Application
+        run: npm run build
+        env:
+          NODE_ENV: production
+          
+      - name: Build macOS DMG
+        run: npm run dist:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false  # Code signing'i devre dışı bırak (şimdilik)
+          
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installers
+          path: |
+            release/*.dmg
+            release/*.zip
+          retention-days: 5
+
+  # Release Job - Tüm build'ler tamamlandıktan sonra çalışır
+  release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')  # Sadece tag push'larında release oluştur
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installers
+          path: release/windows
+          
+      - name: Download macOS Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-installers
+          path: release/macos
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/windows/*
+            release/macos/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            ## 🎉 DocDataApp Release
+            
+            ### 📦 İndirme Seçenekleri:
+            
+            **Windows:**
+            - `.exe` dosyası: Yükleyici (önerilen)
+            - Tüm Windows kullanıcıları için
+            
+            **macOS:**
+            - `.dmg` dosyası: Intel ve Apple Silicon (M1/M2) için
+            - `.zip` dosyası: Portable sürüm
+            
+            ### 🚀 Kurulum:
+            
+            **Windows:**
+            1. `.exe` dosyasını indirin
+            2. Çift tıklayarak çalıştırın
+            3. Kurulum sihirbazını takip edin
+            
+            **macOS:**
+            1. `.dmg` dosyasını indirin
+            2. Açın ve uygulamayı Applications klasörüne sürükleyin
+            3. İlk açılışta "Güvenlik & Gizlilik" ayarlarından izin verin
+            
+            ### 📝 Notlar:
+            - Tüm bağımlılıklar otomatik olarak yüklenir
+            - İnternet bağlantısı gereklidir (AI özellikleri için)
+            - Minimum Node.js 20.x gereklidir (backend için)
+

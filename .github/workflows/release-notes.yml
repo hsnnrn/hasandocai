@@ -1,0 +1,118 @@
+name: Generate Release Notes
+
+on:
+  release:
+    types: [created, edited]
+
+jobs:
+  update-release-notes:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Tüm geçmişi çek
+          
+      - name: Generate Changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v4
+        with:
+          configuration: ".github/changelog-config.json"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ## 🎉 DocDataApp ${{ github.ref_name }}
+            
+            ### 📦 İndirme Seçenekleri:
+            
+            **Windows:**
+            - `DocDataApp-Setup-*.exe` - Kurulum dosyası (önerilen)
+            - `DocDataApp-Portable-*.exe` - Portable sürüm
+            
+            **macOS:**
+            - `DocDataApp-*.dmg` - Intel Mac & Apple Silicon (M1/M2/M3)
+            - `DocDataApp-*.zip` - Portable sürüm
+            
+            **Linux:**
+            - `DocDataApp-*.AppImage` - Tüm dağıtımlar için
+            - `DocDataApp-*.deb` - Debian/Ubuntu
+            - `DocDataApp-*.rpm` - Fedora/RHEL/CentOS
+            
+            ---
+            
+            ### 📋 Değişiklikler:
+            
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ---
+            
+            ### 🚀 Kurulum Talimatları:
+            
+            #### Windows:
+            1. `.exe` dosyasını indirin
+            2. Çift tıklayın ve kurulum sihirbazını takip edin
+            3. Kurulum tamamlandıktan sonra uygulamayı başlatın
+            
+            #### macOS:
+            1. `.dmg` dosyasını indirin
+            2. Mount edin ve uygulamayı Applications klasörüne sürükleyin
+            3. İlk açılışta sağ tıklayıp "Aç" seçeneğini kullanın
+            4. Sistem ayarlarından gerekli izinleri verin
+            
+            #### Linux:
+            **AppImage:**
+            ```bash
+            chmod +x DocDataApp-*.AppImage
+            ./DocDataApp-*.AppImage
+            ```
+            
+            **Debian/Ubuntu:**
+            ```bash
+            sudo dpkg -i DocDataApp-*.deb
+            sudo apt-get install -f  # Bağımlılıkları düzelt
+            ```
+            
+            **Fedora/RHEL:**
+            ```bash
+            sudo rpm -i DocDataApp-*.rpm
+            ```
+            
+            ---
+            
+            ### 🔧 Sistem Gereksinimleri:
+            
+            - **Windows:** Windows 10 veya üzeri (64-bit)
+            - **macOS:** macOS 10.13 veya üzeri
+            - **Linux:** Ubuntu 18.04+, Fedora 30+, veya eşdeğeri
+            - **RAM:** Minimum 4GB (8GB önerilen)
+            - **Disk:** 500MB boş alan
+            
+            ### ⚡ Özellikler:
+            
+            - 📄 15+ dosya formatı desteği (PDF, DOCX, XLSX, PPTX, vb.)
+            - 🤖 AI destekli doküman analizi
+            - 💬 Akıllı sohbet arayüzü
+            - 🔍 Semantik arama
+            - 📊 Toplu işlem desteği
+            - ☁️ Bulut senkronizasyonu (Supabase)
+            - 🎨 Modern ve kullanıcı dostu arayüz
+            
+            ### 🐛 Bilinen Sorunlar:
+            
+            Bilinen sorunlar için [Issues](https://github.com/${{ github.repository }}/issues) sayfasını kontrol edin.
+            
+            ### 💬 Destek:
+            
+            Sorularınız ve sorunlarınız için:
+            - [GitHub Discussions](https://github.com/${{ github.repository }}/discussions)
+            - [GitHub Issues](https://github.com/${{ github.repository }}/issues)
+            
+            ### 🙏 Katkıda Bulunun:
+            
+            Projeye katkıda bulunmak isterseniz [CONTRIBUTING.md](https://github.com/${{ github.repository }}/blob/main/CONTRIBUTING.md) dosyasını inceleyin.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
