@@ -36,7 +36,7 @@ buildDependenciesFromSource: true
 
 # Windows configuration
 win:
-  icon: assets/icon.ico
+  # icon: assets/icon.ico  # Temporarily disabled - will use default
   target:
     - target: nsis
       arch:
@@ -51,7 +51,7 @@ win:
 
 # macOS configuration
 mac:
-  icon: assets/icon.icns
+  # icon: assets/icon.icns  # Temporarily disabled - will use default
   category: public.app-category.productivity
   target:
     - target: dmg
@@ -70,7 +70,7 @@ mac:
 
 # Linux configuration
 linux:
-  icon: assets/icon.png
+  # icon: assets/icon.png  # Temporarily disabled - will use default
   category: Office
   target:
     - target: AppImage
@@ -94,17 +94,17 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: DocDataApp
-  installerIcon: assets/icon.ico
-  uninstallerIcon: assets/icon.ico
-  installerHeaderIcon: assets/icon.ico
+  # installerIcon: assets/icon.ico  # Temporarily disabled
+  # uninstallerIcon: assets/icon.ico  # Temporarily disabled
+  # installerHeaderIcon: assets/icon.ico  # Temporarily disabled
   include: assets/installer.nsh
   script: assets/installer.nsh
 
 # DMG configuration
 dmg:
   title: DocDataApp
-  icon: assets/icon.icns
-  background: assets/dmg-background.png
+  # icon: assets/icon.icns  # Temporarily disabled - will use default
+  # background: assets/dmg-background.png  # Temporarily disabled
   contents:
     - x: 140
       y: 200
@@ -120,8 +120,8 @@ dmg:
 # Publishing configuration
 publish:
   provider: github
-  owner: turkishdeepkebab
-  repo: Docdataapp
+  owner: hsnnrn
+  repo: hasandocai
   releaseType: release
 
 # Auto-update configuration

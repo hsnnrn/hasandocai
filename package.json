@@ -168,7 +168,6 @@
     "buildDependenciesFromSource": true,
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "assets/icon.svg",
       "target": [
         {
           "target": "dmg",
@@ -189,13 +188,9 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "assets/entitlements.mac.plist",
-      "entitlementsInherit": "assets/entitlements.mac.plist",
-      "notarize": {
-        "teamId": "APPLE_TEAM_ID"
-      }
+      "entitlementsInherit": "assets/entitlements.mac.plist"
     },
     "win": {
-      "icon": "assets/icon.svg",
       "target": [
         {
           "target": "nsis",
@@ -213,7 +208,6 @@
       ]
     },
     "linux": {
-      "icon": "assets/icon.svg",
       "category": "Office",
       "target": [
         {
@@ -238,14 +232,12 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "turkishdeepkebab",
-      "repo": "Docdataapp"
+      "owner": "hsnnrn",
+      "repo": "hasandocai"
     },
     "generateUpdatesFilesForAllChannels": true,
     "dmg": {
       "title": "DocDataApp",
-      "icon": "assets/icon.svg",
-      "background": "assets/dmg-background.png",
       "contents": [
         {
           "x": 140,
