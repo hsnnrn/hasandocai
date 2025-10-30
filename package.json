@@ -242,7 +242,6 @@
     "generateUpdatesFilesForAllChannels": true,
     "dmg": {
       "title": "DocDataApp",
-      "background": "assets/dmg-background.png",
       "contents": [
         {
           "x": 140,

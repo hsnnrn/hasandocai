@@ -97,7 +97,6 @@ nsis:
 # DMG configuration
 dmg:
   title: DocDataApp
-  background: assets/dmg-background.png
   contents:
     - x: 140
       y: 200
