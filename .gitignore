@@ -188,3 +188,6 @@ venv.bak/
 # Test files
 test-*.html
 debug-*.html
+
+# Other repositories
+hasandocai/

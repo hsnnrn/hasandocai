@@ -36,6 +36,7 @@ buildDependenciesFromSource: true
 
 # Windows configuration
 win:
+  icon: assets/icon.ico
   target:
     - target: nsis
       arch:
@@ -50,6 +51,7 @@ win:
 
 # macOS configuration
 mac:
+  icon: assets/icon.icns
   category: public.app-category.productivity
   target:
     - target: dmg
@@ -68,6 +70,7 @@ mac:
 
 # Linux configuration
 linux:
+  icon: assets/icon.png
   category: Office
   target:
     - target: AppImage
@@ -91,12 +94,17 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: DocDataApp
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
   include: assets/installer.nsh
   script: assets/installer.nsh
 
 # DMG configuration
 dmg:
   title: DocDataApp
+  icon: assets/icon.icns
+  background: assets/dmg-background.png
   contents:
     - x: 140
       y: 200

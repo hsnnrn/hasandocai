@@ -168,6 +168,7 @@
     "buildDependenciesFromSource": true,
     "mac": {
       "category": "public.app-category.productivity",
+      "icon": "assets/icon.svg",
       "target": [
         {
           "target": "dmg",
@@ -194,6 +195,7 @@
       }
     },
     "win": {
+      "icon": "assets/icon.svg",
       "target": [
         {
           "target": "nsis",
@@ -242,6 +244,8 @@
     "generateUpdatesFilesForAllChannels": true,
     "dmg": {
       "title": "DocDataApp",
+      "icon": "assets/icon.svg",
+      "background": "assets/dmg-background.png",
       "contents": [
         {
           "x": 140,
