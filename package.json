@@ -113,20 +113,16 @@
     "cors": "^2.8.5",
     "docx": "^8.5.0",
     "dotenv": "^17.2.2",
-    "electron-store": "^8.1.0",
-    "electron-updater": "^6.1.4",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "form-data": "^4.0.4",
     "html-to-docx": "^1.8.0",
-    "keytar": "^7.9.0",
     "lucide-react": "^0.279.0",
     "mammoth": "^1.6.0",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "pdf2html": "^4.4.0",
     "pdfjs-dist": "^3.11.174",
-    "python-shell": "^5.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.2.3",
@@ -136,6 +132,12 @@
     "tesseract.js": "^6.0.1",
     "xlsx": "^0.18.5",
     "zustand": "^4.4.1"
+  },
+  "optionalDependencies": {
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.4",
+    "keytar": "^7.9.0",
+    "python-shell": "^5.0.0"
   },
   "build": {
     "appId": "com.docconverter.app",

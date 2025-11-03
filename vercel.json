@@ -3,7 +3,7 @@
   "buildCommand": "npm run build:renderer",
   "outputDirectory": "dist/renderer",
   "devCommand": "npm run dev:renderer",
-  "installCommand": "npm install --ignore-scripts --no-optional --legacy-peer-deps || npm install --ignore-scripts --no-optional",
+  "installCommand": "npm install --ignore-scripts --legacy-peer-deps || npm install --ignore-scripts",
   "framework": "vite",
   "rewrites": [
     {
