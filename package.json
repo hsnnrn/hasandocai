@@ -39,7 +39,7 @@
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "electron-rebuild": "electron-rebuild",
     "electron-rebuild:keytar": "electron-rebuild -f -w keytar",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "node -e \"if (!process.env.SKIP_ELECTRON_BUILDER && !process.env.SKIP_POSTINSTALL) { require('child_process').execSync('electron-builder install-app-deps', {stdio: 'inherit'}) } else { console.log('⏭️  Skipping electron-builder (Vercel build)') }\"",
     "start": "npm run dev",
     "start:fast": "npm run dev:fast",
     "start:prod": "npm run build && electron .",
